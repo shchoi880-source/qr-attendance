@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#12372a" />
+    <meta name="description" content="서버 없이 기기에 저장하는 개인 고정 QR 출석부" />
+    <title>QR 출석부</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./vendor/qrcode.min.js" defer></script>
+    <script src="./vendor/html5-qrcode.min.js" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="brand" data-go="home" aria-label="QR 출석부 홈으로 이동">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M5 5h8v8H5V5Zm3 3v2h2V8H8Zm11-3h8v8h-8V5Zm3 3v2h2V8h-2ZM5 19h8v8H5v-8Zm3 3v2h2v-2H8Zm11-3h3v3h-3v-3Zm5 0h3v8h-3v-3h-2v3h-3v-3h3v-2h3v-3Z"/></svg></span>
+          <span><strong>QR 출석부</strong><small>기기에 안전하게 저장</small></span>
+        </button>
+        <nav class="desktop-nav" aria-label="주요 메뉴">
+          <button data-route="home" class="active">홈</button><button data-route="scan">QR 출석</button><button data-route="people">사람 관리</button><button data-route="records">출석 내역</button><button data-route="settings">백업·설정</button>
+        </nav>
+        <div class="today-pill" id="todayPill"></div>
+      </header>
+
+      <main>
+        <section class="view active" data-view="home" aria-labelledby="homeTitle">
+          <div class="home-hero">
+            <div>
+              <p class="eyebrow">오늘의 출석 현황</p>
+              <h1 id="homeTitle">QR을 보여주면<br /><em>출석 완료.</em></h1>
+              <p class="hero-copy">카메라가 있는 휴대폰, 태블릿, 노트북에서 바로 사용할 수 있습니다. 기록은 이 기기에만 보관됩니다.</p>
+              <div class="hero-actions"><button class="btn btn-primary btn-large" data-go="scan"><span class="btn-icon">⌗</span> QR 출석 시작</button><button class="btn btn-secondary btn-large" data-go="people">+ 사람 등록</button></div>
+            </div>
+            <div class="stat-card" aria-label="오늘 출석 요약">
+              <div class="stat-date" id="heroDate"></div><div class="stat-main"><strong id="todayCount">0</strong><span>명 출석</span></div><div class="progress-track"><span id="todayProgress"></span></div><p><span id="totalPeopleCount">등록 0명</span><span id="remainingCount">미출석 0명</span></p>
+            </div>
+          </div>
+          <div class="quick-grid">
+            <button class="quick-card scan-card" data-go="scan"><span class="quick-icon">⌗</span><span><strong>카메라로 출석</strong><small>QR을 비추면 자동으로 기록돼요</small></span><span class="arrow">→</span></button>
+            <button class="quick-card" data-go="people"><span class="quick-icon">＋</span><span><strong>새 사람 등록</strong><small>고정 QR을 만들고 저장해요</small></span><span class="arrow">→</span></button>
+            <button class="quick-card" data-go="records"><span class="quick-icon">≡</span><span><strong>출석 내역 보기</strong><small>날짜별 확인과 CSV 다운로드</small></span><span class="arrow">→</span></button>
+          </div>
+          <div class="panel recent-panel">
+            <div class="panel-head"><div><p class="eyebrow">최근 기록</p><h2>방금 출석한 사람</h2></div><button class="text-btn" data-go="records">전체 보기 →</button></div>
+            <div id="recentList" class="recent-list empty-state compact"><span class="empty-icon">○</span><p>아직 오늘 출석 기록이 없습니다.</p></div>
+          </div>
+        </section>
+
+        <section class="view" data-view="scan" aria-labelledby="scanTitle">
+          <div class="page-head"><div><p class="eyebrow">QR 카메라</p><h1 id="scanTitle">출석 체크</h1><p>개인 QR을 네모 안에 보여주세요.</p></div><div class="scan-count"><strong id="scanTodayCount">0</strong><span>오늘 출석</span></div></div>
+          <div class="scan-layout">
+            <div class="scanner-card">
+              <div id="reader" class="reader"><div id="scannerPlaceholder" class="scanner-placeholder"><div class="qr-outline"><i></i><i></i><i></i><i></i><span>⌗</span></div><strong>카메라가 꺼져 있습니다</strong><p>아래 버튼을 눌러 출석을 시작하세요.</p></div></div>
+              <div id="scanResult" class="scan-result" aria-live="assertive"></div>
+              <div class="scanner-controls"><select id="cameraSelect" class="select" aria-label="사용할 카메라"><option value="">카메라 자동 선택</option></select><button id="startScanBtn" class="btn btn-primary btn-large">카메라 시작</button><button id="stopScanBtn" class="btn btn-secondary btn-large hidden">카메라 끄기</button></div>
+              <p class="helper">카메라 영상은 외부로 전송되거나 저장되지 않습니다.</p>
+            </div>
+            <aside class="scan-side">
+              <div class="tip-card"><span>1</span><div><strong>QR을 화면에 맞추기</strong><p>너무 가까우면 조금 떨어뜨려 주세요.</p></div></div>
+              <div class="tip-card"><span>2</span><div><strong>소리와 화면 확인</strong><p>이름과 ‘출석 완료’가 나오면 끝입니다.</p></div></div>
+              <div class="tip-card"><span>3</span><div><strong>바로 다음 사람</strong><p>결과가 사라지면 다음 QR을 보여주세요.</p></div></div>
+              <div class="manual-box"><strong>카메라가 안 되나요?</strong><p>사람 관리에서 이름 옆 ‘직접 출석’을 누를 수 있습니다.</p><button class="text-btn" data-go="people">사람 관리로 이동 →</button></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" data-view="people" aria-labelledby="peopleTitle">
+          <div class="page-head"><div><p class="eyebrow">고정 QR 만들기</p><h1 id="peopleTitle">사람 관리</h1><p>이름만 입력해도 바로 개인 QR을 만들 수 있습니다.</p></div><button id="openPersonFormBtn" class="btn btn-primary btn-large">+ 새 사람 등록</button></div>
+          <div id="personFormWrap" class="panel form-panel hidden">
+            <div class="panel-head"><div><p class="eyebrow">새 등록</p><h2>사람 정보</h2></div><button id="closePersonFormBtn" class="icon-btn" aria-label="등록 폼 닫기">×</button></div>
+            <form id="personForm" class="person-form">
+              <label><span>이름 <b>필수</b></span><input id="personName" required maxlength="40" autocomplete="name" placeholder="예: 홍길동" /></label>
+              <label><span>생년월일 <small>선택</small></span><input id="personBirth" type="date" /></label>
+              <label><span>전화번호 <small>선택</small></span><input id="personPhone" type="tel" maxlength="30" autocomplete="tel" placeholder="예: 010-1234-5678" /></label>
+              <label class="wide"><span>메모 <small>선택</small></span><input id="personMemo" maxlength="100" placeholder="소속이나 참고사항" /></label>
+              <div class="form-actions wide"><button type="button" id="cancelPersonBtn" class="btn btn-secondary">취소</button><button type="submit" class="btn btn-primary">저장하고 QR 만들기</button></div>
+            </form>
+          </div>
+          <div class="toolbar"><label class="search"><span>⌕</span><input id="peopleSearch" placeholder="이름 또는 전화번호 검색" /></label><span class="count-chip" id="peopleCountChip">0명 등록</span></div>
+          <div id="peopleList" class="people-list"></div>
+        </section>
+
+        <section class="view" data-view="records" aria-labelledby="recordsTitle">
+          <div class="page-head"><div><p class="eyebrow">기기 내부 기록</p><h1 id="recordsTitle">출석 내역</h1><p>날짜별 기록을 확인하고 CSV 파일로 내려받으세요.</p></div><button id="exportCsvBtn" class="btn btn-primary btn-large">CSV 다운로드</button></div>
+          <div class="record-filters panel"><label><span>조회 날짜</span><input type="date" id="recordDate" /></label><label class="search"><span>⌕</span><input id="recordSearch" placeholder="이름 검색" /></label><div class="record-summary"><span><b id="recordPresent">0</b>명 출석</span><span><b id="recordAbsent">0</b>명 미출석</span></div></div>
+          <div class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>이름</th><th>출석 날짜</th><th>출석 시간</th><th>연락처</th><th><span class="sr-only">관리</span></th></tr></thead><tbody id="recordsBody"></tbody></table></div><div id="recordsEmpty" class="empty-state"><span class="empty-icon">○</span><strong>이 날짜의 출석 기록이 없습니다</strong><p>QR 출석을 시작하면 여기에 기록됩니다.</p></div></div>
+        </section>
+
+        <section class="view" data-view="settings" aria-labelledby="settingsTitle">
+          <div class="page-head"><div><p class="eyebrow">데이터 관리</p><h1 id="settingsTitle">백업·설정</h1><p>기기를 바꾸기 전에 전체 백업 파일을 꼭 저장해 주세요.</p></div></div>
+          <div class="settings-grid">
+            <div class="panel setting-card accent"><span class="setting-icon">↓</span><div><h2>전체 데이터 백업</h2><p>등록한 사람과 모든 출석 기록을 하나의 백업 파일로 저장합니다.</p></div><button id="backupBtn" class="btn btn-primary">백업 파일 다운로드</button></div>
+            <div class="panel setting-card"><span class="setting-icon">↑</span><div><h2>백업 파일 복원</h2><p>다른 기기에서 저장한 백업 파일을 이 기기로 가져옵니다.</p></div><label class="btn btn-secondary file-btn">백업 파일 선택<input id="restoreInput" type="file" accept="application/json,.json" /></label></div>
+            <div class="panel setting-card"><span class="setting-icon">▣</span><div><h2>앱처럼 설치</h2><p>홈 화면에 추가하면 주소창 없이 빠르게 실행할 수 있습니다.</p></div><button id="installBtn" class="btn btn-secondary">홈 화면에 설치</button></div>
+            <div class="panel setting-card"><span class="setting-icon">◇</span><div><h2>기기 저장소</h2><p id="storageSummary">저장 공간을 확인하고 있습니다.</p></div><button id="persistBtn" class="btn btn-secondary">데이터 보관 보호 요청</button></div>
+          </div>
+          <div class="panel danger-zone"><div><h2>모든 데이터 지우기</h2><p>이 기기에 저장된 사람과 출석 기록을 모두 삭제합니다. 먼저 백업해 주세요.</p></div><button id="clearDataBtn" class="btn btn-danger">전체 삭제</button></div>
+          <div class="local-notice"><span>i</span><p><strong>서버에 저장하지 않습니다.</strong> 이 브라우저의 데이터를 삭제하거나 기기를 초기화하면 기록도 사라집니다. 정기적으로 백업 파일을 내려받아 보관해 주세요.</p></div>
+        </section>
+      </main>
+
+      <nav class="mobile-nav" aria-label="모바일 주요 메뉴"><button data-route="home" class="active"><span>⌂</span>홈</button><button data-route="scan" class="scan-nav"><span>⌗</span>QR 출석</button><button data-route="people"><span>♙</span>사람</button><button data-route="records"><span>≡</span>내역</button><button data-route="settings"><span>•••</span>설정</button></nav>
+    </div>
+
+    <dialog id="qrDialog" class="modal">
+      <button class="modal-close" data-close-dialog aria-label="닫기">×</button>
+      <div class="qr-modal-content"><p class="eyebrow">개인 고정 QR</p><h2 id="qrPersonName">이름</h2><p class="qr-id" id="qrPersonId"></p><div id="qrCode" class="qr-code"></div><p class="qr-help">이 QR은 계속 사용할 수 있습니다.<br />휴대폰에 저장하거나 인쇄해 주세요.</p><div class="modal-actions"><button id="downloadQrBtn" class="btn btn-primary">QR 이미지 저장</button><button id="printQrBtn" class="btn btn-secondary">인쇄</button></div></div>
+    </dialog>
+    <dialog id="confirmDialog" class="modal confirm-modal"><div class="confirm-content"><span class="confirm-icon">!</span><h2 id="confirmTitle">확인</h2><p id="confirmText"></p><div class="modal-actions"><button id="confirmCancel" class="btn btn-secondary">취소</button><button id="confirmOkay" class="btn btn-danger">삭제</button></div></div></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "QR 출석부",
+  "short_name": "QR 출석",
+  "description": "개인별 고정 QR로 출석을 기록하고 CSV로 저장하는 오프라인 우선 웹앱",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1e9",
+  "theme_color": "#12372a",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
