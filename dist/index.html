@@ -21,13 +21,14 @@
           <span><strong>QR 출석부</strong><small>기기에 안전하게 저장</small></span>
         </button>
         <nav class="desktop-nav" aria-label="주요 메뉴">
-          <button data-route="home" class="active">홈</button><button data-route="scan">QR 출석</button><button data-route="people">사람 관리</button><button data-route="records">출석 내역</button><button data-route="settings">백업·설정</button>
+          <button data-route="home">홈</button><button data-route="scan" class="active">QR 출석</button><button data-route="people">사람 관리</button><button data-route="records">출석 내역</button><button data-route="settings">백업·설정</button>
         </nav>
+        <button id="adminToggle" class="admin-toggle" type="button"><span>●</span> 관리자</button>
         <div class="today-pill" id="todayPill"></div>
       </header>
 
       <main>
-        <section class="view active" data-view="home" aria-labelledby="homeTitle">
+        <section class="view" data-view="home" aria-labelledby="homeTitle">
           <div class="home-hero">
             <div>
               <p class="eyebrow">오늘의 출석 현황</p>
@@ -50,7 +51,7 @@
           </div>
         </section>
 
-        <section class="view" data-view="scan" aria-labelledby="scanTitle">
+        <section class="view active" data-view="scan" aria-labelledby="scanTitle">
           <div class="page-head"><div><p class="eyebrow">QR 카메라</p><h1 id="scanTitle">출석 체크</h1><p>개인 QR을 네모 안에 보여주세요.</p></div><div class="scan-count"><strong id="scanTodayCount">0</strong><span>오늘 출석</span></div></div>
           <div class="scan-layout">
             <div class="scanner-card">
@@ -103,12 +104,25 @@
         </section>
       </main>
 
-      <nav class="mobile-nav" aria-label="모바일 주요 메뉴"><button data-route="home" class="active"><span>⌂</span>홈</button><button data-route="scan" class="scan-nav"><span>⌗</span>QR 출석</button><button data-route="people"><span>♙</span>사람</button><button data-route="records"><span>≡</span>내역</button><button data-route="settings"><span>•••</span>설정</button></nav>
+      <nav class="mobile-nav" aria-label="모바일 주요 메뉴"><button data-route="home"><span>⌂</span>홈</button><button data-route="scan" class="scan-nav active"><span>⌗</span>QR 출석</button><button data-route="people"><span>♙</span>사람</button><button data-route="records"><span>≡</span>내역</button><button data-route="settings"><span>•••</span>설정</button></nav>
     </div>
 
     <dialog id="qrDialog" class="modal">
       <button class="modal-close" data-close-dialog aria-label="닫기">×</button>
       <div class="qr-modal-content"><p class="eyebrow">개인 고정 QR</p><h2 id="qrPersonName">이름</h2><p class="qr-id" id="qrPersonId"></p><div id="qrCode" class="qr-code"></div><p class="qr-help">이 QR은 계속 사용할 수 있습니다.<br />휴대폰에 저장하거나 인쇄해 주세요.</p><div class="modal-actions"><button id="downloadQrBtn" class="btn btn-primary">QR 이미지 저장</button><button id="printQrBtn" class="btn btn-secondary">인쇄</button></div></div>
+    </dialog>
+    <dialog id="pinDialog" class="modal pin-modal">
+      <button class="modal-close" id="closePinDialog" aria-label="관리자 로그인 닫기">×</button>
+      <form id="pinForm" class="pin-content">
+        <span class="pin-lock" aria-hidden="true">◆</span>
+        <p class="eyebrow">관리자 전용</p>
+        <h2>관리자 PIN 입력</h2>
+        <p>사람 관리, 출석 내역과 백업 기능을 열려면<br />5자리 PIN을 입력하세요.</p>
+        <label class="pin-field"><span class="sr-only">관리자 PIN</span><input id="adminPin" type="password" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="off" placeholder="•••••" required /></label>
+        <p id="pinError" class="pin-error" role="alert"></p>
+        <button class="btn btn-primary btn-large" type="submit">관리자 모드 열기</button>
+        <small>이 PIN은 서버 계정이 아닌 간단한 화면 잠금입니다.</small>
+      </form>
     </dialog>
     <dialog id="confirmDialog" class="modal confirm-modal"><div class="confirm-content"><span class="confirm-icon">!</span><h2 id="confirmTitle">확인</h2><p id="confirmText"></p><div class="modal-actions"><button id="confirmCancel" class="btn btn-secondary">취소</button><button id="confirmOkay" class="btn btn-danger">삭제</button></div></div></dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

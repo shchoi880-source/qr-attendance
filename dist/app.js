@@ -2,6 +2,10 @@
   "use strict";
 
   const STORAGE_KEY = "qrAttendance.data.v1";
+  const ADMIN_SESSION_KEY = "qrAttendance.adminUntil";
+  const ADMIN_PIN = "14035";
+  const ADMIN_DURATION = 30 * 60 * 1000;
+  const PROTECTED_ROUTES = new Set(["home", "people", "records", "settings"]);
   const VERSION = 1;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -15,6 +19,7 @@
   let scanOverlayTimer = null;
   let deferredInstallPrompt = null;
   let confirmResolver = null;
+  let pendingAdminRoute = "home";
 
   function loadData() {
     try {
@@ -104,6 +109,7 @@
     renderHome();
     renderPeople();
     renderRecords();
+    updateAdminUi();
     updateStorageSummary();
   }
 
@@ -169,7 +175,11 @@
 
   function navigate(route, updateHistory = true) {
     const valid = ["home", "scan", "people", "records", "settings"];
-    if (!valid.includes(route)) route = "home";
+    if (!valid.includes(route)) route = "scan";
+    if (PROTECTED_ROUTES.has(route) && !isAdminUnlocked()) {
+      openPinDialog(route);
+      return;
+    }
     if (route !== "scan" && scanning) stopScanner();
     $$(".view").forEach((view) => view.classList.toggle("active", view.dataset.view === route));
     $$('[data-route]').forEach((button) => button.classList.toggle("active", button.dataset.route === route));
@@ -177,6 +187,62 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (route === "records") renderRecords();
     if (route === "people") renderPeople();
+  }
+
+  function isAdminUnlocked() {
+    return Number(sessionStorage.getItem(ADMIN_SESSION_KEY) || 0) > Date.now();
+  }
+
+  function updateAdminUi() {
+    const unlocked = isAdminUnlocked();
+    const toggle = $("#adminToggle");
+    toggle.classList.toggle("unlocked", unlocked);
+    toggle.innerHTML = `<span>●</span> ${unlocked ? "관리자 잠금" : "관리자"}`;
+  }
+
+  function openPinDialog(route = "home") {
+    pendingAdminRoute = route;
+    $("#adminPin").value = "";
+    $("#pinError").textContent = "";
+    const dialog = $("#pinDialog");
+    if (!dialog.open) dialog.showModal();
+    setTimeout(() => $("#adminPin").focus(), 50);
+  }
+
+  function closePinDialog() {
+    $("#pinDialog").close();
+    pendingAdminRoute = "home";
+  }
+
+  function unlockAdmin(event) {
+    event.preventDefault();
+    const input = $("#adminPin");
+    if (input.value !== ADMIN_PIN) {
+      $("#pinError").textContent = "PIN 번호가 맞지 않습니다.";
+      const content = $(".pin-content");
+      content.classList.remove("shake");
+      void content.offsetWidth;
+      content.classList.add("shake");
+      input.select();
+      return;
+    }
+    sessionStorage.setItem(ADMIN_SESSION_KEY, String(Date.now() + ADMIN_DURATION));
+    const route = pendingAdminRoute;
+    $("#pinDialog").close();
+    updateAdminUi();
+    showToast("관리자 모드가 30분 동안 열렸습니다.");
+    navigate(route);
+  }
+
+  function toggleAdmin() {
+    if (isAdminUnlocked()) {
+      sessionStorage.removeItem(ADMIN_SESSION_KEY);
+      updateAdminUi();
+      showToast("관리자 모드를 잠갔습니다.");
+      navigate("scan");
+    } else {
+      openPinDialog("home");
+    }
   }
 
   function openPersonForm() {
@@ -472,6 +538,10 @@
       if (event.target.closest("[data-close-dialog]")) $("#qrDialog").close();
     });
     $("#openPersonFormBtn").addEventListener("click", openPersonForm);
+    $("#adminToggle").addEventListener("click", toggleAdmin);
+    $("#pinForm").addEventListener("submit", unlockAdmin);
+    $("#closePinDialog").addEventListener("click", closePinDialog);
+    $("#pinDialog").addEventListener("cancel", (event) => { event.preventDefault(); closePinDialog(); });
     $("#closePersonFormBtn").addEventListener("click", closePersonForm);
     $("#cancelPersonBtn").addEventListener("click", closePersonForm);
     $("#personForm").addEventListener("submit", addPerson);
@@ -518,7 +588,7 @@
       const okay = await askConfirm("모든 데이터를 삭제할까요?", "등록한 사람과 모든 출석 기록이 이 기기에서 사라집니다. 이 작업은 되돌릴 수 없습니다.", "모두 삭제");
       if (okay) { data = emptyState(); saveData(); renderAll(); showToast("모든 데이터를 삭제했습니다."); }
     });
-    window.addEventListener("popstate", () => navigate(location.hash.slice(1) || "home", false));
+    window.addEventListener("popstate", () => navigate(location.hash.slice(1) || "scan", false));
     window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); deferredInstallPrompt = event; });
   }
 
@@ -526,7 +596,7 @@
     $("#recordDate").value = localDate();
     bindEvents();
     renderAll();
-    navigate(location.hash.slice(1) || "home", false);
+    navigate(location.hash.slice(1) || "scan", false);
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js").catch((error) => console.warn("오프라인 준비 실패", error));
   }
 
