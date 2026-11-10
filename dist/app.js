@@ -5,11 +5,17 @@
   const ADMIN_SESSION_KEY = "qrAttendance.adminUntil";
   const ADMIN_PIN = "14035";
   const ADMIN_DURATION = 30 * 60 * 1000;
+  const ATTENDANCE_COOLDOWN = 30 * 60 * 1000;
   const PROTECTED_ROUTES = new Set(["home", "people", "records", "settings"]);
   const VERSION = 1;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const emptyState = () => ({ version: VERSION, participants: [], records: [] });
+  const defaultPresets = () => Array.from({ length: 5 }, () => ({ start: "", end: "" }));
+  const normalizePresets = (presets) => defaultPresets().map((fallback, index) => {
+    const item = Array.isArray(presets) ? presets[index] : null;
+    return item && typeof item.start === "string" && typeof item.end === "string" ? { start: item.start, end: item.end } : fallback;
+  });
+  const emptyState = () => ({ version: VERSION, participants: [], records: [], presets: defaultPresets() });
   let data = loadData();
   let currentQrPerson = null;
   let qrScanner = null;
@@ -24,7 +30,7 @@
   function loadData() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (saved && Array.isArray(saved.participants) && Array.isArray(saved.records)) return { version: VERSION, participants: saved.participants, records: saved.records };
+      if (saved && Array.isArray(saved.participants) && Array.isArray(saved.records)) return { version: VERSION, participants: saved.participants, records: saved.records, presets: normalizePresets(saved.presets) };
     } catch (error) {
       console.warn("저장 데이터를 읽지 못했습니다.", error);
     }
@@ -109,6 +115,7 @@
     renderHome();
     renderPeople();
     renderRecords();
+    renderPresetButtons();
     updateAdminUi();
     updateStorageSummary();
   }
@@ -117,13 +124,14 @@
     const today = localDate();
     const records = data.records.filter((record) => record.date === today).sort((a, b) => b.timestamp - a.timestamp);
     const present = new Set(records.map((record) => record.participantId)).size;
+    const attendanceCount = records.length;
     const total = data.participants.length;
     const remaining = Math.max(total - present, 0);
     $("#todayPill").textContent = displayDate(today, true);
     $("#heroDate").textContent = displayDate(today, true);
-    $("#todayCount").textContent = present;
-    $("#scanTodayCount").textContent = present;
-    $("#totalPeopleCount").textContent = `등록 ${total}명`;
+    $("#todayCount").textContent = attendanceCount;
+    $("#scanTodayCount").textContent = attendanceCount;
+    $("#totalPeopleCount").textContent = `출석 인원 ${present}명`;
     $("#remainingCount").textContent = `미출석 ${remaining}명`;
     $("#todayProgress").style.width = total ? `${Math.min(100, present / total * 100)}%` : "0%";
     const recent = records.slice(0, 5);
@@ -147,30 +155,87 @@
       return;
     }
     const today = localDate();
-    const presentIds = new Set(data.records.filter((record) => record.date === today).map((record) => record.participantId));
+    const todayByPerson = new Map();
+    data.records.filter((record) => record.date === today).forEach((record) => todayByPerson.set(record.participantId, (todayByPerson.get(record.participantId) || 0) + 1));
     container.innerHTML = people.map((person) => {
       const details = [person.phone, person.birth, person.memo].filter(Boolean).join(" · ") || "추가 정보 없음";
-      const attended = presentIds.has(person.id);
-      return `<article class="person-card"><span class="avatar">${escapeHtml(person.name.slice(0, 1))}</span><div class="person-main"><strong>${escapeHtml(person.name)}</strong><p>${escapeHtml(details)}</p></div><div class="person-actions"><button class="btn btn-secondary" data-action="qr" data-id="${escapeHtml(person.id)}">QR 보기</button><button class="btn ${attended ? "btn-secondary" : "btn-primary"}" data-action="manual" data-id="${escapeHtml(person.id)}" ${attended ? "disabled" : ""}>${attended ? "오늘 출석됨" : "직접 출석"}</button><button class="btn btn-secondary more-btn" data-action="delete" data-id="${escapeHtml(person.id)}" aria-label="${escapeHtml(person.name)} 삭제">×</button></div></article>`;
+      const count = todayByPerson.get(person.id) || 0;
+      const info = count ? `${details} · 오늘 ${count}회 출석` : details;
+      return `<article class="person-card"><span class="avatar">${escapeHtml(person.name.slice(0, 1))}</span><div class="person-main"><strong>${escapeHtml(person.name)}</strong><p>${escapeHtml(info)}</p></div><div class="person-actions"><button class="btn btn-secondary" data-action="qr" data-id="${escapeHtml(person.id)}">QR 보기</button><button class="btn btn-primary" data-action="manual" data-id="${escapeHtml(person.id)}">직접 출석</button><button class="btn btn-secondary more-btn" data-action="delete" data-id="${escapeHtml(person.id)}" aria-label="${escapeHtml(person.name)} 삭제">×</button></div></article>`;
     }).join("");
   }
 
+  function recordFilters() {
+    return {
+      startDate: $("#recordStartDate").value || localDate(),
+      endDate: $("#recordEndDate").value || localDate(),
+      start: $("#recordStartTime").value || "00:00",
+      end: $("#recordEndTime").value || "23:59",
+      query: $("#recordSearch").value.trim().toLowerCase()
+    };
+  }
+
+  function filteredRecords(includeName = true) {
+    const filters = recordFilters();
+    if (filters.startDate > filters.endDate || filters.start > filters.end) return { records: [], filters, valid: false };
+    const records = data.records.filter((record) => {
+      const time = String(record.time || "00:00").slice(0, 5);
+      const nameMatch = !includeName || !filters.query || record.name.toLowerCase().includes(filters.query);
+      return record.date >= filters.startDate && record.date <= filters.endDate && time >= filters.start && time <= filters.end && nameMatch;
+    }).sort((a, b) => b.timestamp - a.timestamp);
+    return { records, filters, valid: true };
+  }
+
   function renderRecords() {
-    const date = $("#recordDate").value || localDate();
-    const query = $("#recordSearch").value.trim().toLowerCase();
-    const allForDate = data.records.filter((record) => record.date === date).sort((a, b) => b.timestamp - a.timestamp);
-    const records = allForDate.filter((record) => record.name.toLowerCase().includes(query));
-    const presentCount = new Set(allForDate.map((record) => record.participantId)).size;
-    $("#recordPresent").textContent = presentCount;
-    $("#recordAbsent").textContent = Math.max(data.participants.length - presentCount, 0);
+    const result = filteredRecords(true);
+    const records = result.records;
+    const participantCount = new Set(records.map((record) => record.participantId)).size;
+    $("#recordPresent").textContent = records.length;
+    $("#recordAbsent").textContent = participantCount;
     const body = $("#recordsBody");
     const empty = $("#recordsEmpty");
     body.innerHTML = records.map((record) => {
       const person = personById(record.participantId);
       return `<tr><td>${escapeHtml(record.name)}</td><td>${escapeHtml(displayDate(record.date))}</td><td>${escapeHtml(record.time)}</td><td>${escapeHtml(person?.phone || "-")}</td><td><button class="delete-record" data-record-id="${escapeHtml(record.id)}">기록 삭제</button></td></tr>`;
     }).join("");
+    $("#recordsEmpty strong").textContent = result.valid ? "조회 조건에 맞는 출석 기록이 없습니다" : "조회 기간과 시간을 확인해 주세요";
+    $("#recordsEmpty p").textContent = result.valid ? "기간·시간·이름을 바꾸고 조회 버튼을 눌러보세요." : "시작일·시작시간은 종료일·종료시간보다 앞서야 합니다.";
     empty.classList.toggle("show", records.length === 0);
     $(".table-wrap").classList.toggle("hidden", records.length === 0);
+  }
+
+  function renderPresetButtons() {
+    $("#presetButtons").innerHTML = normalizePresets(data.presets).map((preset, index) => {
+      const configured = preset.start && preset.end;
+      return `<button type="button" class="preset-button ${configured ? "configured" : ""}" data-preset-index="${index}" ${configured ? "" : "disabled"}><b>${index + 1}번</b><span>${configured ? `${escapeHtml(preset.start)}~${escapeHtml(preset.end)}` : "미설정"}</span></button>`;
+    }).join("");
+  }
+
+  function openPresetDialog() {
+    const presets = normalizePresets(data.presets);
+    $("#presetEditor").innerHTML = presets.map((preset, index) => `<div class="preset-row"><strong>${index + 1}번</strong><label><span>시작</span><input type="time" data-preset-start="${index}" value="${escapeHtml(preset.start)}" /></label><span class="preset-wave">~</span><label><span>종료</span><input type="time" data-preset-end="${index}" value="${escapeHtml(preset.end)}" /></label></div>`).join("");
+    $("#presetDialog").showModal();
+  }
+
+  function savePresets(event) {
+    event.preventDefault();
+    const presets = defaultPresets().map((_, index) => ({ start: $(`[data-preset-start="${index}"]`).value, end: $(`[data-preset-end="${index}"]`).value }));
+    const invalid = presets.find((preset) => (preset.start && !preset.end) || (!preset.start && preset.end) || (preset.start && preset.end && preset.start >= preset.end));
+    if (invalid) return showToast("각 프리셋의 시작·종료시간을 모두 입력하고 순서를 확인해 주세요.");
+    data.presets = presets;
+    saveData();
+    renderPresetButtons();
+    $("#presetDialog").close();
+    showToast("시간 프리셋 5개를 저장했습니다.");
+  }
+
+  function applyPreset(index) {
+    const preset = normalizePresets(data.presets)[index];
+    if (!preset?.start || !preset?.end) return;
+    $("#recordStartTime").value = preset.start;
+    $("#recordEndTime").value = preset.end;
+    renderRecords();
+    showToast(`${index + 1}번 시간 ${preset.start}~${preset.end}을 적용했습니다.`);
   }
 
   function navigate(route, updateHistory = true) {
@@ -381,20 +446,23 @@
       data.participants.push(person);
     }
     const result = markAttendance(person, "qr");
-    if (result.duplicate) showScanResult("duplicate", "↻", person.name, `오늘 ${result.record.time.slice(0, 5)}에 이미 출석했습니다.`);
+    if (result.cooldown) showScanResult("duplicate", "↻", person.name, `30분 이내 재출석은 제외됩니다. 약 ${result.remainingMinutes}분 후 다시 출석할 수 있습니다.`);
     else showScanResult("success", "✓", person.name, `${result.record.time.slice(0, 5)} 출석 완료`);
   }
 
   function markAttendance(person, source = "manual") {
-    const date = localDate();
-    const duplicate = data.records.find((record) => record.participantId === person.id && record.date === date);
-    if (duplicate) return { duplicate: true, record: duplicate };
     const now = new Date();
+    const latest = data.records.filter((record) => record.participantId === person.id).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
+    if (latest) {
+      const elapsed = now.getTime() - Number(latest.timestamp || 0);
+      if (elapsed >= 0 && elapsed < ATTENDANCE_COOLDOWN) return { cooldown: true, record: latest, remainingMinutes: Math.ceil((ATTENDANCE_COOLDOWN - elapsed) / 60000) };
+    }
+    const date = localDate(now);
     const record = { id: makeId("A"), participantId: person.id, name: person.name, date, time: localTime(now), timestamp: now.getTime(), source };
     data.records.push(record);
     saveData();
     renderAll();
-    return { duplicate: false, record };
+    return { cooldown: false, record };
   }
 
   function showScanResult(type, icon, name, message) {
@@ -427,21 +495,23 @@
   }
 
   function exportCsv() {
-    const date = $("#recordDate").value || localDate();
-    const records = data.records.filter((record) => record.date === date).sort((a, b) => a.timestamp - b.timestamp);
-    if (!records.length) return showToast("선택한 날짜에 저장된 출석 기록이 없습니다.");
+    const result = filteredRecords(true);
+    if (!result.valid) return showToast("시작 시간은 종료 시간보다 빨라야 합니다.");
+    const records = [...result.records].sort((a, b) => a.timestamp - b.timestamp);
+    if (!records.length) return showToast("현재 조회 조건에 맞는 출석 기록이 없습니다.");
     const rows = [["이름", "고유번호", "생년월일", "전화번호", "출석날짜", "출석시간", "메모"]];
     records.forEach((record) => {
       const person = personById(record.participantId) || {};
       rows.push([record.name, record.participantId, person.birth || "", person.phone || "", record.date, record.time, person.memo || ""]);
     });
     const csv = "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `출석명단_${date}.csv`);
+    const timeLabel = `${result.filters.start.replace(":", "")}-${result.filters.end.replace(":", "")}`;
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `출석명단_${result.filters.startDate}-${result.filters.endDate}_${timeLabel}.csv`);
     showToast("CSV 파일을 저장했습니다.");
   }
 
   function backupData() {
-    const payload = { app: "QR 출석부", version: VERSION, exportedAt: new Date().toISOString(), participants: data.participants, records: data.records };
+    const payload = { app: "QR 출석부", version: VERSION, exportedAt: new Date().toISOString(), participants: data.participants, records: data.records, presets: normalizePresets(data.presets) };
     downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `QR출석부_전체백업_${localDate()}.json`);
     showToast("전체 백업 파일을 저장했습니다.");
   }
@@ -460,7 +530,7 @@
       if (!Array.isArray(parsed.participants) || !Array.isArray(parsed.records)) throw new Error("올바른 QR 출석부 백업 파일이 아닙니다.");
       const okay = await askConfirm("백업 파일을 복원할까요?", "현재 이 기기에 있는 데이터는 백업 파일의 내용으로 바뀝니다.", "복원하기", false);
       if (!okay) return;
-      data = { version: VERSION, participants: parsed.participants, records: parsed.records };
+      data = { version: VERSION, participants: parsed.participants, records: parsed.records, presets: normalizePresets(parsed.presets) };
       saveData(); renderAll(); showToast("백업 데이터를 복원했습니다.");
     } catch (error) {
       showToast(error.message || "백업 파일을 읽지 못했습니다.");
@@ -546,8 +616,18 @@
     $("#cancelPersonBtn").addEventListener("click", closePersonForm);
     $("#personForm").addEventListener("submit", addPerson);
     $("#peopleSearch").addEventListener("input", renderPeople);
-    $("#recordDate").addEventListener("change", renderRecords);
-    $("#recordSearch").addEventListener("input", renderRecords);
+    $("#searchRecordsBtn").addEventListener("click", () => {
+      if ($("#recordStartDate").value > $("#recordEndDate").value) return showToast("조회 시작일은 종료일보다 앞서야 합니다.");
+      if ($("#recordStartTime").value > $("#recordEndTime").value) return showToast("시작 시간은 종료 시간보다 빨라야 합니다.");
+      renderRecords();
+    });
+    $("#recordSearch").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); $("#searchRecordsBtn").click(); } });
+    $("#presetButtons").addEventListener("click", (event) => { const button = event.target.closest("[data-preset-index]"); if (button) applyPreset(Number(button.dataset.presetIndex)); });
+    $("#openPresetDialogBtn").addEventListener("click", openPresetDialog);
+    $("#presetForm").addEventListener("submit", savePresets);
+    $("#closePresetDialog").addEventListener("click", () => $("#presetDialog").close());
+    $("#cancelPresetBtn").addEventListener("click", () => $("#presetDialog").close());
+    $("#presetDialog").addEventListener("cancel", (event) => { event.preventDefault(); $("#presetDialog").close(); });
     $("#startScanBtn").addEventListener("click", startScanner);
     $("#stopScanBtn").addEventListener("click", stopScanner);
     $("#cameraSelect").addEventListener("change", async () => { if (scanning) { await stopScanner(); startScanner(); } });
@@ -569,7 +649,7 @@
       if (button.dataset.action === "qr") openQrDialog(person);
       if (button.dataset.action === "manual") {
         const result = markAttendance(person, "manual");
-        showToast(result.duplicate ? `${person.name}님은 오늘 이미 출석했습니다.` : `${person.name}님을 출석 처리했습니다.`);
+        showToast(result.cooldown ? `${person.name}님은 30분 이내 출석 기록이 있어 카운트하지 않았습니다. 약 ${result.remainingMinutes}분 남았습니다.` : `${person.name}님 출석 횟수를 1회 추가했습니다.`);
       }
       if (button.dataset.action === "delete") {
         const okay = await askConfirm(`${person.name}님을 삭제할까요?`, "사람 정보는 삭제되지만 과거 출석 기록은 유지됩니다.");
@@ -593,7 +673,8 @@
   }
 
   function initialize() {
-    $("#recordDate").value = localDate();
+    $("#recordStartDate").value = localDate();
+    $("#recordEndDate").value = localDate();
     bindEvents();
     renderAll();
     navigate(location.hash.slice(1) || "scan", false);

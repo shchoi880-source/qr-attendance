@@ -37,7 +37,7 @@
               <div class="hero-actions"><button class="btn btn-primary btn-large" data-go="scan"><span class="btn-icon">⌗</span> QR 출석 시작</button><button class="btn btn-secondary btn-large" data-go="people">+ 사람 등록</button></div>
             </div>
             <div class="stat-card" aria-label="오늘 출석 요약">
-              <div class="stat-date" id="heroDate"></div><div class="stat-main"><strong id="todayCount">0</strong><span>명 출석</span></div><div class="progress-track"><span id="todayProgress"></span></div><p><span id="totalPeopleCount">등록 0명</span><span id="remainingCount">미출석 0명</span></p>
+              <div class="stat-date" id="heroDate"></div><div class="stat-main"><strong id="todayCount">0</strong><span>회 출석</span></div><div class="progress-track"><span id="todayProgress"></span></div><p><span id="totalPeopleCount">출석 인원 0명</span><span id="remainingCount">미출석 0명</span></p>
             </div>
           </div>
           <div class="quick-grid">
@@ -52,7 +52,7 @@
         </section>
 
         <section class="view active" data-view="scan" aria-labelledby="scanTitle">
-          <div class="page-head"><div><p class="eyebrow">QR 카메라</p><h1 id="scanTitle">출석 체크</h1><p>개인 QR을 네모 안에 보여주세요.</p></div><div class="scan-count"><strong id="scanTodayCount">0</strong><span>오늘 출석</span></div></div>
+          <div class="page-head"><div><p class="eyebrow">QR 카메라</p><h1 id="scanTitle">출석 체크</h1><p>개인 QR을 네모 안에 보여주세요. 30분이 지나면 다시 출석할 수 있습니다.</p></div><div class="scan-count"><strong id="scanTodayCount">0</strong><span>오늘 출석 횟수</span></div></div>
           <div class="scan-layout">
             <div class="scanner-card">
               <div id="reader" class="reader"><div id="scannerPlaceholder" class="scanner-placeholder"><div class="qr-outline"><i></i><i></i><i></i><i></i><span>⌗</span></div><strong>카메라가 꺼져 있습니다</strong><p>아래 버튼을 눌러 출석을 시작하세요.</p></div></div>
@@ -86,8 +86,21 @@
         </section>
 
         <section class="view" data-view="records" aria-labelledby="recordsTitle">
-          <div class="page-head"><div><p class="eyebrow">기기 내부 기록</p><h1 id="recordsTitle">출석 내역</h1><p>날짜별 기록을 확인하고 CSV 파일로 내려받으세요.</p></div><button id="exportCsvBtn" class="btn btn-primary btn-large">CSV 다운로드</button></div>
-          <div class="record-filters panel"><label><span>조회 날짜</span><input type="date" id="recordDate" /></label><label class="search"><span>⌕</span><input id="recordSearch" placeholder="이름 검색" /></label><div class="record-summary"><span><b id="recordPresent">0</b>명 출석</span><span><b id="recordAbsent">0</b>명 미출석</span></div></div>
+          <div class="page-head"><div><p class="eyebrow">날짜·시간별 기록</p><h1 id="recordsTitle">출석 내역 조회</h1><p>날짜와 시간대를 지정하고 이름 또는 전체 기록을 조회하세요.</p></div><button id="exportCsvBtn" class="btn btn-primary btn-large">조회 결과 CSV</button></div>
+          <div class="record-filters panel">
+            <label><span>조회 시작일</span><input type="date" id="recordStartDate" /></label>
+            <label><span>조회 종료일</span><input type="date" id="recordEndDate" /></label>
+            <label><span>시작 시간</span><input type="time" id="recordStartTime" value="00:00" /></label>
+            <label><span>종료 시간</span><input type="time" id="recordEndTime" value="23:59" /></label>
+            <label class="search"><span>⌕</span><input id="recordSearch" placeholder="이름 입력 (비우면 전체)" /></label>
+            <div class="record-filter-actions"><button id="searchRecordsBtn" class="btn btn-primary">조회</button></div>
+            <div class="record-summary"><span><b id="recordPresent">0</b>회 출석</span><span><b id="recordAbsent">0</b>명 참여</span></div>
+          </div>
+          <div class="preset-bar panel">
+            <div class="preset-heading"><span>시간 프리셋</span><small>1번~5번 버튼을 누르면 저장한 시간이 바로 적용됩니다.</small></div>
+            <div id="presetButtons" class="preset-buttons"></div>
+            <button id="openPresetDialogBtn" class="btn btn-secondary preset-setting-btn">프리셋 설정</button>
+          </div>
           <div class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>이름</th><th>출석 날짜</th><th>출석 시간</th><th>연락처</th><th><span class="sr-only">관리</span></th></tr></thead><tbody id="recordsBody"></tbody></table></div><div id="recordsEmpty" class="empty-state"><span class="empty-icon">○</span><strong>이 날짜의 출석 기록이 없습니다</strong><p>QR 출석을 시작하면 여기에 기록됩니다.</p></div></div>
         </section>
 
@@ -122,6 +135,16 @@
         <p id="pinError" class="pin-error" role="alert"></p>
         <button class="btn btn-primary btn-large" type="submit">관리자 모드 열기</button>
         <small>이 PIN은 서버 계정이 아닌 간단한 화면 잠금입니다.</small>
+      </form>
+    </dialog>
+    <dialog id="presetDialog" class="modal preset-modal">
+      <button class="modal-close" id="closePresetDialog" aria-label="프리셋 설정 닫기">×</button>
+      <form id="presetForm" class="preset-form">
+        <p class="eyebrow">빠른 시간 조회</p>
+        <h2>시간 프리셋 5개 설정</h2>
+        <p>각 번호에 자주 조회하는 시작시간과 종료시간만 저장하세요.</p>
+        <div id="presetEditor" class="preset-editor"></div>
+        <div class="modal-actions"><button type="button" id="cancelPresetBtn" class="btn btn-secondary">취소</button><button type="submit" class="btn btn-primary">프리셋 저장</button></div>
       </form>
     </dialog>
     <dialog id="confirmDialog" class="modal confirm-modal"><div class="confirm-content"><span class="confirm-icon">!</span><h2 id="confirmTitle">확인</h2><p id="confirmText"></p><div class="modal-actions"><button id="confirmCancel" class="btn btn-secondary">취소</button><button id="confirmOkay" class="btn btn-danger">삭제</button></div></div></dialog>
