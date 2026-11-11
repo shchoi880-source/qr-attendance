@@ -43,7 +43,7 @@
           <div class="quick-grid">
             <button class="quick-card scan-card" data-go="scan"><span class="quick-icon">⌗</span><span><strong>카메라로 출석</strong><small>QR을 비추면 자동으로 기록돼요</small></span><span class="arrow">→</span></button>
             <button class="quick-card" data-go="people"><span class="quick-icon">＋</span><span><strong>새 사람 등록</strong><small>고정 QR을 만들고 저장해요</small></span><span class="arrow">→</span></button>
-            <button class="quick-card" data-go="records"><span class="quick-icon">≡</span><span><strong>출석 내역 보기</strong><small>날짜별 확인과 CSV 다운로드</small></span><span class="arrow">→</span></button>
+            <button class="quick-card" data-go="records"><span class="quick-icon">≡</span><span><strong>출석 내역 보기</strong><small>날짜별 확인과 TXT 저장</small></span><span class="arrow">→</span></button>
           </div>
           <div class="panel recent-panel">
             <div class="panel-head"><div><p class="eyebrow">최근 기록</p><h2>방금 출석한 사람</h2></div><button class="text-btn" data-go="records">전체 보기 →</button></div>
@@ -86,7 +86,7 @@
         </section>
 
         <section class="view" data-view="records" aria-labelledby="recordsTitle">
-          <div class="page-head"><div><p class="eyebrow">날짜·시간별 기록</p><h1 id="recordsTitle">출석 내역 조회</h1><p>날짜와 시간대를 지정하고 이름 또는 전체 기록을 조회하세요.</p></div><button id="exportCsvBtn" class="btn btn-primary btn-large">CSV 공유·저장</button></div>
+          <div class="page-head"><div><p class="eyebrow">날짜·시간별 기록</p><h1 id="recordsTitle">출석 내역 조회</h1><p>날짜와 시간대를 지정하고 이름 또는 전체 기록을 조회하세요.</p></div><button id="exportCsvBtn" class="btn btn-primary btn-large">TXT 저장·공유</button></div>
           <div class="record-filters panel">
             <label><span>조회 시작일</span><input type="date" id="recordStartDate" /></label>
             <label><span>조회 종료일</span><input type="date" id="recordEndDate" /></label>
@@ -108,7 +108,7 @@
         <section class="view" data-view="settings" aria-labelledby="settingsTitle">
           <div class="page-head"><div><p class="eyebrow">데이터 관리</p><h1 id="settingsTitle">백업·설정</h1><p>기기를 바꾸기 전에 전체 백업 파일을 꼭 저장해 주세요.</p></div></div>
           <div class="settings-grid">
-            <div class="panel setting-card site-qr-card"><span class="setting-icon">⌗</span><div class="site-qr-copy"><h2>사이트 접속 QR</h2><p>이 QR을 다른 사람에게 보여주거나 보내면 휴대폰 카메라로 찍어 출석부 사이트를 바로 열 수 있습니다.</p><small>qr-attendance-local-20261109.workspace-039582.chatgpt.site</small><button id="shareSiteQrBtn" class="btn btn-primary">QR 공유·저장</button></div><div id="siteAccessQr" class="site-access-qr" aria-label="QR 출석부 사이트 접속 QR"></div></div>
+            <div class="panel setting-card site-qr-card"><span class="setting-icon">⌗</span><div class="site-qr-copy"><h2>사이트 접속 QR</h2><p>다른 사람에게 보여주거나 보내면 휴대폰 카메라로 찍어 출석부를 바로 열 수 있습니다.</p><small>qr-attendance-local-20261109.workspace-039582.chatgpt.site</small><button id="shareSiteQrBtn" class="btn btn-primary">크게 보기·저장</button></div><div id="siteAccessQr" class="site-access-qr" aria-label="QR 출석부 사이트 접속 QR"></div></div>
             <div class="panel setting-card accent"><span class="setting-icon">↓</span><div><h2>전체 데이터 백업</h2><p>등록한 사람과 모든 출석 기록을 하나의 백업 파일로 저장합니다.</p></div><button id="backupBtn" class="btn btn-primary">백업 파일 다운로드</button></div>
             <div class="panel setting-card"><span class="setting-icon">↑</span><div><h2>백업 파일 복원</h2><p>다른 기기에서 저장한 백업 파일을 이 기기로 가져옵니다.</p></div><label class="btn btn-secondary file-btn">백업 파일 선택<input id="restoreInput" type="file" accept="application/json,.json" /></label></div>
             <div class="panel setting-card"><span class="setting-icon">▣</span><div><h2>앱처럼 설치</h2><p>홈 화면에 추가하면 주소창 없이 빠르게 실행할 수 있습니다.</p></div><button id="installBtn" class="btn btn-secondary">홈 화면에 설치</button></div>
@@ -125,6 +125,17 @@
     <dialog id="qrDialog" class="modal">
       <button class="modal-close" data-close-dialog aria-label="닫기">×</button>
       <div class="qr-modal-content"><p class="eyebrow">개인 고정 QR</p><h2 id="qrPersonName">이름</h2><p class="qr-id" id="qrPersonId"></p><div id="qrCode" class="qr-code"></div><p class="qr-help">이 QR은 계속 사용할 수 있습니다.<br />휴대폰에 저장하거나 인쇄해 주세요.</p><div class="modal-actions"><button id="downloadQrBtn" class="btn btn-primary">QR 이미지 저장</button><button id="printQrBtn" class="btn btn-secondary">인쇄</button></div></div>
+    </dialog>
+    <dialog id="siteQrDialog" class="modal site-qr-modal">
+      <button class="modal-close" id="closeSiteQrDialog" aria-label="접속 QR 닫기">×</button>
+      <div class="qr-modal-content">
+        <p class="eyebrow">공유용 접속 QR</p>
+        <h2>QR 출석부 접속하기</h2>
+        <p class="site-qr-description">휴대폰 기본 카메라로 QR을 비추고<br />나타나는 주소를 누르면 출석부가 열립니다.</p>
+        <img id="siteQrCardPreview" class="qr-card-preview" alt="QR 출석부 접속 안내 이미지" />
+        <p class="qr-save-tip">휴대폰에서는 아래 버튼을 누른 뒤 사진·파일 앱을 선택하세요.<br />저장창이 안 뜨면 위 이미지를 길게 눌러 저장할 수도 있습니다.</p>
+        <div class="modal-actions stacked-mobile"><button id="saveSiteQrImageBtn" class="btn btn-primary">QR 안내 이미지 저장·공유</button><button id="copySiteUrlBtn" class="btn btn-secondary">사이트 주소 복사</button></div>
+      </div>
     </dialog>
     <dialog id="pinDialog" class="modal pin-modal">
       <button class="modal-close" id="closePinDialog" aria-label="관리자 로그인 닫기">×</button>

@@ -19,6 +19,8 @@
   const emptyState = () => ({ version: VERSION, participants: [], records: [], presets: defaultPresets() });
   let data = loadData();
   let currentQrPerson = null;
+  let currentSiteQrCardBlob = null;
+  let currentSiteQrPreviewUrl = "";
   let qrScanner = null;
   let scanning = false;
   let lastDecodedText = "";
@@ -395,14 +397,75 @@
     return image?.src || "";
   }
 
-  function downloadCurrentQr() {
+  function drawRoundRect(context, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    context.beginPath();
+    context.moveTo(x + r, y);
+    context.arcTo(x + width, y, x + width, y + height, r);
+    context.arcTo(x + width, y + height, x, y + height, r);
+    context.arcTo(x, y + height, x, y, r);
+    context.arcTo(x, y, x + width, y, r);
+    context.closePath();
+  }
+
+  function makeQrCardCanvas(qrCanvas, { eyebrow, title, description, footer }) {
+    const card = document.createElement("canvas");
+    card.width = 900;
+    card.height = 1160;
+    const context = card.getContext("2d");
+    context.fillStyle = "#f3efe4";
+    context.fillRect(0, 0, card.width, card.height);
+    context.fillStyle = "#fffdf8";
+    drawRoundRect(context, 55, 45, 790, 1070, 38);
+    context.fill();
+
+    context.textAlign = "center";
+    context.fillStyle = "#12372a";
+    context.font = "800 24px Arial, sans-serif";
+    context.fillText(eyebrow, 450, 112);
+    context.font = "800 54px Arial, sans-serif";
+    context.fillText(title, 450, 184);
+    context.fillStyle = "#65716b";
+    context.font = "26px Arial, sans-serif";
+    context.fillText(description, 450, 232);
+
+    context.fillStyle = "#ffffff";
+    context.strokeStyle = "#d9ddd7";
+    context.lineWidth = 3;
+    drawRoundRect(context, 115, 275, 670, 670, 30);
+    context.fill();
+    context.stroke();
+    context.drawImage(qrCanvas, 160, 320, 580, 580);
+
+    context.fillStyle = "#12372a";
+    context.font = "800 29px Arial, sans-serif";
+    context.fillText("카메라로 QR을 비춰주세요", 450, 1000);
+    context.fillStyle = "#65716b";
+    context.font = "20px Arial, sans-serif";
+    context.fillText(footer, 450, 1052, 700);
+    return card;
+  }
+
+  function canvasBlob(canvas) {
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  }
+
+  async function downloadCurrentQr() {
     if (!currentQrPerson) return;
-    const url = qrImageData();
-    if (!url) return showToast("QR 이미지가 아직 준비되지 않았습니다.");
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `QR_${safeFilename(currentQrPerson.name)}_${currentQrPerson.id}.png`;
-    link.click();
+    const qrCanvas = $("#qrCode canvas");
+    if (!qrCanvas) return showToast("QR 이미지가 아직 준비되지 않았습니다.");
+    const card = makeQrCardCanvas(qrCanvas, {
+      eyebrow: "출석용 개인 고정 QR",
+      title: currentQrPerson.name,
+      description: "출석할 때 카메라 화면에 보여주세요.",
+      footer: currentQrPerson.id
+    });
+    const blob = await canvasBlob(card);
+    if (!blob) return showToast("QR 안내 이미지를 만들지 못했습니다.");
+    const action = await shareOrDownloadFile(blob, `QR_${safeFilename(currentQrPerson.name)}_${currentQrPerson.id}.png`, `${currentQrPerson.name} 출석 QR`);
+    if (action === "shared-file") showToast("공유창에서 사진·파일 앱을 선택해 저장하세요.");
+    if (action === "download-requested") showToast("QR 이미지 저장을 요청했습니다. 다운로드 목록을 확인하세요.");
+    if (action === "cancelled") showToast("QR 저장을 취소했습니다.");
   }
 
   function renderSiteAccessQr() {
@@ -416,17 +479,54 @@
     new QRCode(target, { text: SITE_URL, width: 720, height: 720, colorDark: "#12372a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
   }
 
-  async function shareSiteAccessQr() {
+  async function makeSiteQrCardBlob() {
     const canvas = $("#siteAccessQr canvas");
-    if (!canvas) return showToast("접속 QR이 아직 준비되지 않았습니다.");
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-    if (!blob) return showToast("접속 QR 이미지를 만들지 못했습니다.");
-    const action = await shareOrDownloadFile(blob, "QR출석부_사이트_접속용_QR.png", "QR 출석부 사이트 접속 QR", SITE_URL);
-    if (action === "shared-file") showToast("공유창에서 QR 저장 위치나 보낼 앱을 선택하세요.");
-    if (action === "shared-text") showToast("공유창에서 출석부 주소를 저장하거나 보내세요.");
-    if (action === "download-requested") showToast("브라우저에 QR 다운로드를 요청했습니다. 다운로드 목록을 확인하세요.");
-    if (action === "unsupported") showToast("이 브라우저는 파일 저장을 지원하지 않습니다. Chrome 또는 Safari에서 다시 열어 주세요.");
+    if (!canvas) return null;
+    const card = makeQrCardCanvas(canvas, {
+      eyebrow: "공유용 접속 QR",
+      title: "QR 출석부 접속하기",
+      description: "휴대폰 기본 카메라로 QR을 비춰주세요.",
+      footer: "qr-attendance-local-20261109.workspace-039582.chatgpt.site"
+    });
+    return canvasBlob(card);
+  }
+
+  async function shareSiteAccessQr() {
+    currentSiteQrCardBlob = await makeSiteQrCardBlob();
+    if (!currentSiteQrCardBlob) return showToast("접속 QR이 아직 준비되지 않았습니다.");
+    const preview = $("#siteQrCardPreview");
+    if (currentSiteQrPreviewUrl) URL.revokeObjectURL(currentSiteQrPreviewUrl);
+    currentSiteQrPreviewUrl = URL.createObjectURL(currentSiteQrCardBlob);
+    preview.src = currentSiteQrPreviewUrl;
+    $("#siteQrDialog").showModal();
+  }
+
+  function closeSiteQrDialog() {
+    $("#siteQrDialog").close();
+  }
+
+  async function saveSiteAccessQr() {
+    currentSiteQrCardBlob ||= await makeSiteQrCardBlob();
+    if (!currentSiteQrCardBlob) return showToast("접속 QR 안내 이미지를 만들지 못했습니다.");
+    const action = await shareOrDownloadFile(currentSiteQrCardBlob, "QR출석부_사이트_접속_안내.png", "QR 출석부 사이트 접속 QR");
+    if (action === "shared-file") showToast("공유창에서 사진·파일 앱을 선택해 저장하세요.");
+    if (action === "download-requested") showToast("QR 이미지 저장을 요청했습니다. 안 보이면 이미지를 길게 눌러 저장하세요.");
     if (action === "cancelled") showToast("QR 내보내기를 취소했습니다.");
+  }
+
+  async function copySiteUrl() {
+    try {
+      await navigator.clipboard.writeText(SITE_URL);
+      showToast("사이트 주소를 복사했습니다.");
+    } catch (_) {
+      const input = document.createElement("textarea");
+      input.value = SITE_URL;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+      showToast("사이트 주소를 복사했습니다.");
+    }
   }
 
   function printCurrentQr() {
@@ -551,10 +651,8 @@
 
   function safeFilename(value) { return value.replace(/[\\/:*?"<>|]/g, "_").trim() || "출석"; }
 
-  function csvCell(value) {
-    let text = String(value ?? "");
-    if (/^[=+\-@]/.test(text)) text = `'${text}`;
-    return `"${text.replace(/"/g, '""')}"`;
+  function textCell(value) {
+    return String(value ?? "").replace(/[\t\r\n]+/g, " ").trim();
   }
 
   async function exportCsv() {
@@ -567,15 +665,20 @@
       const person = personById(record.participantId) || {};
       rows.push([record.name, record.participantId, person.birth || "", person.phone || "", record.date, record.time, person.memo || ""]);
     });
-    const csv = "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const text = [
+      "QR 출석부 조회 결과",
+      `조회 기간: ${result.filters.startDate} ${result.filters.start} ~ ${result.filters.endDate} ${result.filters.end}`,
+      `총 출석 횟수: ${records.length}회`,
+      "",
+      ...rows.map((row) => row.map(textCell).join("\t"))
+    ].join("\r\n");
     const timeLabel = `${result.filters.start.replace(":", "")}-${result.filters.end.replace(":", "")}`;
-    const filename = `출석명단_${result.filters.startDate}-${result.filters.endDate}_${timeLabel}.csv`;
-    const action = await shareOrDownloadFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename, "QR 출석부 조회 결과", csv.replace(/^\ufeff/, ""), true);
-    if (action === "shared-file") showToast("공유창에서 파일 저장 위치나 보낼 앱을 선택하세요.");
-    if (action === "shared-text") showToast("공유창에서 CSV 내용을 저장하거나 보낼 앱을 선택하세요.");
-    if (action === "download-requested") showToast("브라우저에 다운로드를 요청했습니다. 다운로드 목록을 확인하세요.");
-    if (action === "unsupported") showToast("이 브라우저는 파일 저장을 지원하지 않습니다. Chrome 또는 Safari에서 다시 열어 주세요.");
-    if (action === "cancelled") showToast("CSV 내보내기를 취소했습니다.");
+    const filename = `출석명단_${result.filters.startDate}-${result.filters.endDate}_${timeLabel}.txt`;
+    const action = await shareOrDownloadFile(new Blob(["\ufeff" + text], { type: "text/plain;charset=utf-8" }), filename, "QR 출석부 조회 결과", text);
+    if (action === "shared-file") showToast("공유창에서 메모장·파일 앱을 선택해 TXT로 저장하세요.");
+    if (action === "shared-text") showToast("공유창에서 메모장 등에 출석 내역을 저장하세요.");
+    if (action === "download-requested") showToast("TXT 파일 저장을 요청했습니다. 다운로드 목록을 확인하세요.");
+    if (action === "cancelled") showToast("TXT 내보내기를 취소했습니다.");
   }
 
   function backupData() {
@@ -620,8 +723,6 @@
       console.warn("휴대폰 공유 기능을 사용할 수 없습니다.", error);
     }
 
-    const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-    if (isMobile) return "unsupported";
     downloadBlob(blob, filename);
     return "download-requested";
   }
@@ -740,6 +841,10 @@
     $("#printQrBtn").addEventListener("click", printCurrentQr);
     $("#exportCsvBtn").addEventListener("click", exportCsv);
     $("#shareSiteQrBtn").addEventListener("click", shareSiteAccessQr);
+    $("#saveSiteQrImageBtn").addEventListener("click", saveSiteAccessQr);
+    $("#copySiteUrlBtn").addEventListener("click", copySiteUrl);
+    $("#closeSiteQrDialog").addEventListener("click", closeSiteQrDialog);
+    $("#siteQrDialog").addEventListener("cancel", (event) => { event.preventDefault(); closeSiteQrDialog(); });
     $("#backupBtn").addEventListener("click", backupData);
     $("#restoreInput").addEventListener("change", (event) => restoreData(event.target.files[0]));
     $("#persistBtn").addEventListener("click", requestPersistence);
