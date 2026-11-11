@@ -86,7 +86,7 @@
         </section>
 
         <section class="view" data-view="records" aria-labelledby="recordsTitle">
-          <div class="page-head"><div><p class="eyebrow">날짜·시간별 기록</p><h1 id="recordsTitle">출석 내역 조회</h1><p>날짜와 시간대를 지정하고 이름 또는 전체 기록을 조회하세요.</p></div><button id="exportCsvBtn" class="btn btn-primary btn-large">조회 결과 CSV</button></div>
+          <div class="page-head"><div><p class="eyebrow">날짜·시간별 기록</p><h1 id="recordsTitle">출석 내역 조회</h1><p>날짜와 시간대를 지정하고 이름 또는 전체 기록을 조회하세요.</p></div><button id="exportCsvBtn" class="btn btn-primary btn-large">CSV 공유·저장</button></div>
           <div class="record-filters panel">
             <label><span>조회 시작일</span><input type="date" id="recordStartDate" /></label>
             <label><span>조회 종료일</span><input type="date" id="recordEndDate" /></label>
@@ -108,6 +108,7 @@
         <section class="view" data-view="settings" aria-labelledby="settingsTitle">
           <div class="page-head"><div><p class="eyebrow">데이터 관리</p><h1 id="settingsTitle">백업·설정</h1><p>기기를 바꾸기 전에 전체 백업 파일을 꼭 저장해 주세요.</p></div></div>
           <div class="settings-grid">
+            <div class="panel setting-card site-qr-card"><span class="setting-icon">⌗</span><div class="site-qr-copy"><h2>사이트 접속 QR</h2><p>이 QR을 다른 사람에게 보여주거나 보내면 휴대폰 카메라로 찍어 출석부 사이트를 바로 열 수 있습니다.</p><small>qr-attendance-local-20261109.workspace-039582.chatgpt.site</small><button id="shareSiteQrBtn" class="btn btn-primary">QR 공유·저장</button></div><div id="siteAccessQr" class="site-access-qr" aria-label="QR 출석부 사이트 접속 QR"></div></div>
             <div class="panel setting-card accent"><span class="setting-icon">↓</span><div><h2>전체 데이터 백업</h2><p>등록한 사람과 모든 출석 기록을 하나의 백업 파일로 저장합니다.</p></div><button id="backupBtn" class="btn btn-primary">백업 파일 다운로드</button></div>
             <div class="panel setting-card"><span class="setting-icon">↑</span><div><h2>백업 파일 복원</h2><p>다른 기기에서 저장한 백업 파일을 이 기기로 가져옵니다.</p></div><label class="btn btn-secondary file-btn">백업 파일 선택<input id="restoreInput" type="file" accept="application/json,.json" /></label></div>
             <div class="panel setting-card"><span class="setting-icon">▣</span><div><h2>앱처럼 설치</h2><p>홈 화면에 추가하면 주소창 없이 빠르게 실행할 수 있습니다.</p></div><button id="installBtn" class="btn btn-secondary">홈 화면에 설치</button></div>

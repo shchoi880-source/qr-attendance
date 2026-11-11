@@ -4,6 +4,7 @@
   const STORAGE_KEY = "qrAttendance.data.v1";
   const ADMIN_SESSION_KEY = "qrAttendance.adminUntil";
   const ADMIN_PIN = "14035";
+  const SITE_URL = "https://qr-attendance-local-20261109.workspace-039582.chatgpt.site";
   const ADMIN_DURATION = 30 * 60 * 1000;
   const ATTENDANCE_COOLDOWN = 30 * 60 * 1000;
   const PROTECTED_ROUTES = new Set(["home", "people", "records", "settings"]);
@@ -404,6 +405,27 @@
     link.click();
   }
 
+  function renderSiteAccessQr() {
+    const target = $("#siteAccessQr");
+    if (!target) return;
+    target.innerHTML = "";
+    if (typeof QRCode === "undefined") {
+      target.innerHTML = "<p>QR 생성 기능을 불러오지 못했습니다.</p>";
+      return;
+    }
+    new QRCode(target, { text: SITE_URL, width: 720, height: 720, colorDark: "#12372a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
+  }
+
+  async function shareSiteAccessQr() {
+    const canvas = $("#siteAccessQr canvas");
+    if (!canvas) return showToast("접속 QR이 아직 준비되지 않았습니다.");
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) return showToast("접속 QR 이미지를 만들지 못했습니다.");
+    const action = await shareOrDownloadFile(blob, "QR출석부_사이트_접속용_QR.png", "QR 출석부 사이트 접속 QR");
+    if (action === "shared") showToast("접속 QR을 공유하거나 저장했습니다.");
+    if (action === "downloaded") showToast("접속 QR 이미지를 다운로드했습니다.");
+  }
+
   function printCurrentQr() {
     if (!currentQrPerson) return;
     const url = qrImageData();
@@ -532,7 +554,7 @@
     return `"${text.replace(/"/g, '""')}"`;
   }
 
-  function exportCsv() {
+  async function exportCsv() {
     const result = filteredRecords(true);
     if (!result.valid) return showToast("시작 시간은 종료 시간보다 빨라야 합니다.");
     const records = [...result.records].sort((a, b) => a.timestamp - b.timestamp);
@@ -544,8 +566,10 @@
     });
     const csv = "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
     const timeLabel = `${result.filters.start.replace(":", "")}-${result.filters.end.replace(":", "")}`;
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `출석명단_${result.filters.startDate}-${result.filters.endDate}_${timeLabel}.csv`);
-    showToast("CSV 파일을 저장했습니다.");
+    const filename = `출석명단_${result.filters.startDate}-${result.filters.endDate}_${timeLabel}.csv`;
+    const action = await shareOrDownloadFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename, "QR 출석부 조회 결과");
+    if (action === "shared") showToast("CSV 파일을 공유하거나 저장했습니다.");
+    if (action === "downloaded") showToast("CSV 파일을 다운로드했습니다.");
   }
 
   function backupData() {
@@ -559,6 +583,21 @@
     const link = document.createElement("a");
     link.href = url; link.download = filename; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function shareOrDownloadFile(blob, filename, title) {
+    try {
+      const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title, files: [file] });
+        return "shared";
+      }
+    } catch (error) {
+      if (error?.name === "AbortError") return "cancelled";
+      console.warn("파일 공유를 사용할 수 없어 다운로드로 전환합니다.", error);
+    }
+    downloadBlob(blob, filename);
+    return "downloaded";
   }
 
   async function restoreData(file) {
@@ -674,6 +713,7 @@
     $("#downloadQrBtn").addEventListener("click", downloadCurrentQr);
     $("#printQrBtn").addEventListener("click", printCurrentQr);
     $("#exportCsvBtn").addEventListener("click", exportCsv);
+    $("#shareSiteQrBtn").addEventListener("click", shareSiteAccessQr);
     $("#backupBtn").addEventListener("click", backupData);
     $("#restoreInput").addEventListener("change", (event) => restoreData(event.target.files[0]));
     $("#persistBtn").addEventListener("click", requestPersistence);
@@ -709,6 +749,7 @@
     $("#recordEndDate").value = localDate();
     prepareClockInput($("#recordStartTime"));
     prepareClockInput($("#recordEndTime"));
+    renderSiteAccessQr();
     bindEvents();
     renderAll();
     navigate(location.hash.slice(1) || "scan", false);
