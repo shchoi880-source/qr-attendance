@@ -63,6 +63,23 @@
     return new Intl.DateTimeFormat("ko-KR", includeWeekday ? { year: "numeric", month: "long", day: "numeric", weekday: "short" } : { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(year, month - 1, day));
   }
 
+  function formatClockInput(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
+    return digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits;
+  }
+
+  function isValidClock(value, allowEndOfDay = false) {
+    if (allowEndOfDay && value === "24:00") return true;
+    return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+  }
+
+  function prepareClockInput(input) {
+    if (!input || input.dataset.clockReady) return;
+    input.dataset.clockReady = "true";
+    input.addEventListener("input", () => { input.value = formatClockInput(input.value); });
+    input.addEventListener("focus", () => input.select());
+  }
+
   function escapeHtml(value = "") {
     return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
   }
@@ -170,14 +187,15 @@
       startDate: $("#recordStartDate").value || localDate(),
       endDate: $("#recordEndDate").value || localDate(),
       start: $("#recordStartTime").value || "00:00",
-      end: $("#recordEndTime").value || "23:59",
+      end: $("#recordEndTime").value || "24:00",
       query: $("#recordSearch").value.trim().toLowerCase()
     };
   }
 
   function filteredRecords(includeName = true) {
     const filters = recordFilters();
-    if (filters.startDate > filters.endDate || filters.start > filters.end) return { records: [], filters, valid: false };
+    const validTimes = isValidClock(filters.start) && isValidClock(filters.end, true) && filters.start < filters.end;
+    if (filters.startDate > filters.endDate || !validTimes) return { records: [], filters, valid: false };
     const records = data.records.filter((record) => {
       const time = String(record.time || "00:00").slice(0, 5);
       const nameMatch = !includeName || !filters.query || record.name.toLowerCase().includes(filters.query);
@@ -196,7 +214,7 @@
     const empty = $("#recordsEmpty");
     body.innerHTML = records.map((record) => {
       const person = personById(record.participantId);
-      return `<tr><td>${escapeHtml(record.name)}</td><td>${escapeHtml(displayDate(record.date))}</td><td>${escapeHtml(record.time)}</td><td>${escapeHtml(person?.phone || "-")}</td><td><button class="delete-record" data-record-id="${escapeHtml(record.id)}">기록 삭제</button></td></tr>`;
+      return `<tr><td>${escapeHtml(record.name)}</td><td><div class="record-datetime"><span>${escapeHtml(displayDate(record.date))}</span><b>${escapeHtml(record.time)}</b></div></td><td>${escapeHtml(person?.phone || "-")}</td></tr>`;
     }).join("");
     $("#recordsEmpty strong").textContent = result.valid ? "조회 조건에 맞는 출석 기록이 없습니다" : "조회 기간과 시간을 확인해 주세요";
     $("#recordsEmpty p").textContent = result.valid ? "기간·시간·이름을 바꾸고 조회 버튼을 눌러보세요." : "시작일·시작시간은 종료일·종료시간보다 앞서야 합니다.";
@@ -213,15 +231,16 @@
 
   function openPresetDialog() {
     const presets = normalizePresets(data.presets);
-    $("#presetEditor").innerHTML = presets.map((preset, index) => `<div class="preset-row"><strong>${index + 1}번</strong><label><span>시작</span><input type="time" data-preset-start="${index}" value="${escapeHtml(preset.start)}" /></label><span class="preset-wave">~</span><label><span>종료</span><input type="time" data-preset-end="${index}" value="${escapeHtml(preset.end)}" /></label></div>`).join("");
+    $("#presetEditor").innerHTML = presets.map((preset, index) => `<div class="preset-row"><strong>${index + 1}번</strong><label><span>시작</span><input type="text" class="clock-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="00:00" aria-label="${index + 1}번 시작 시간 4자리 숫자" data-preset-start="${index}" value="${escapeHtml(preset.start)}" /></label><span class="preset-wave">~</span><label><span>종료</span><input type="text" class="clock-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="24:00" aria-label="${index + 1}번 종료 시간 4자리 숫자" data-preset-end="${index}" value="${escapeHtml(preset.end)}" /></label></div>`).join("");
+    $$("#presetEditor .clock-input").forEach(prepareClockInput);
     $("#presetDialog").showModal();
   }
 
   function savePresets(event) {
     event.preventDefault();
     const presets = defaultPresets().map((_, index) => ({ start: $(`[data-preset-start="${index}"]`).value, end: $(`[data-preset-end="${index}"]`).value }));
-    const invalid = presets.find((preset) => (preset.start && !preset.end) || (!preset.start && preset.end) || (preset.start && preset.end && preset.start >= preset.end));
-    if (invalid) return showToast("각 프리셋의 시작·종료시간을 모두 입력하고 순서를 확인해 주세요.");
+    const invalid = presets.find((preset) => (preset.start && !preset.end) || (!preset.start && preset.end) || (preset.start && preset.end && (!isValidClock(preset.start) || !isValidClock(preset.end, true) || preset.start >= preset.end)));
+    if (invalid) return showToast("시간을 4자리 숫자로 입력해 주세요. 예: 0900~2400");
     data.presets = presets;
     saveData();
     renderPresetButtons();
@@ -618,7 +637,9 @@
     $("#peopleSearch").addEventListener("input", renderPeople);
     $("#searchRecordsBtn").addEventListener("click", () => {
       if ($("#recordStartDate").value > $("#recordEndDate").value) return showToast("조회 시작일은 종료일보다 앞서야 합니다.");
-      if ($("#recordStartTime").value > $("#recordEndTime").value) return showToast("시작 시간은 종료 시간보다 빨라야 합니다.");
+      const start = $("#recordStartTime").value;
+      const end = $("#recordEndTime").value;
+      if (!isValidClock(start) || !isValidClock(end, true) || start >= end) return showToast("시간을 4자리 숫자로 입력해 주세요. 예: 0900~2400");
       renderRecords();
     });
     $("#recordSearch").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); $("#searchRecordsBtn").click(); } });
@@ -656,14 +677,6 @@
         if (okay) { data.participants = data.participants.filter((item) => item.id !== person.id); saveData(); renderAll(); showToast("사람 정보를 삭제했습니다."); }
       }
     });
-    $("#recordsBody").addEventListener("click", async (event) => {
-      const button = event.target.closest("[data-record-id]");
-      if (!button) return;
-      const record = data.records.find((item) => item.id === button.dataset.recordId);
-      if (!record) return;
-      const okay = await askConfirm("이 출석 기록을 삭제할까요?", `${record.name}님의 ${displayDate(record.date)} 기록을 삭제합니다.`);
-      if (okay) { data.records = data.records.filter((item) => item.id !== record.id); saveData(); renderAll(); showToast("출석 기록을 삭제했습니다."); }
-    });
     $("#clearDataBtn").addEventListener("click", async () => {
       const okay = await askConfirm("모든 데이터를 삭제할까요?", "등록한 사람과 모든 출석 기록이 이 기기에서 사라집니다. 이 작업은 되돌릴 수 없습니다.", "모두 삭제");
       if (okay) { data = emptyState(); saveData(); renderAll(); showToast("모든 데이터를 삭제했습니다."); }
@@ -675,6 +688,8 @@
   function initialize() {
     $("#recordStartDate").value = localDate();
     $("#recordEndDate").value = localDate();
+    prepareClockInput($("#recordStartTime"));
+    prepareClockInput($("#recordEndTime"));
     bindEvents();
     renderAll();
     navigate(location.hash.slice(1) || "scan", false);
