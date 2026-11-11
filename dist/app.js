@@ -244,7 +244,7 @@
 
   function openPresetDialog() {
     const presets = normalizePresets(data.presets);
-    $("#presetEditor").innerHTML = presets.map((preset, index) => `<div class="preset-row"><strong>${index + 1}번</strong><label><span>시작</span><input type="text" class="clock-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="00:00" aria-label="${index + 1}번 시작 시간 4자리 숫자" data-preset-start="${index}" value="${escapeHtml(preset.start)}" /></label><span class="preset-wave">~</span><label><span>종료</span><input type="text" class="clock-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="24:00" aria-label="${index + 1}번 종료 시간 4자리 숫자" data-preset-end="${index}" value="${escapeHtml(preset.end)}" /></label></div>`).join("");
+    $("#presetEditor").innerHTML = presets.map((preset, index) => `<div class="preset-row"><strong>${index + 1}번</strong><label><span>시작</span><input type="text" class="clock-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="00:00" aria-label="${index + 1}번 시작 시간 4자리 숫자" data-preset-start="${index}" value="${escapeHtml(preset.start || "00:00")}" /></label><span class="preset-wave">~</span><label><span>종료</span><input type="text" class="clock-input" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="24:00" aria-label="${index + 1}번 종료 시간 4자리 숫자" data-preset-end="${index}" value="${escapeHtml(preset.end || "24:00")}" /></label></div>`).join("");
     $$("#presetEditor .clock-input").forEach(prepareClockInput);
     $("#presetDialog").showModal();
   }
