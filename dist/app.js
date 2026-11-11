@@ -210,16 +210,29 @@
     const participantCount = new Set(records.map((record) => record.participantId)).size;
     $("#recordPresent").textContent = records.length;
     $("#recordAbsent").textContent = participantCount;
-    const body = $("#recordsBody");
+    const groups = new Map();
+    records.forEach((record) => {
+      const key = record.participantId || `name:${record.name}`;
+      if (!groups.has(key)) {
+        const person = personById(record.participantId);
+        groups.set(key, { key, name: person?.name || record.name, phone: person?.phone || "", records: [] });
+      }
+      groups.get(key).records.push(record);
+    });
+    const groupedRecords = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    const container = $("#recordGroups");
     const empty = $("#recordsEmpty");
-    body.innerHTML = records.map((record) => {
-      const person = personById(record.participantId);
-      return `<tr><td>${escapeHtml(record.name)}</td><td><div class="record-datetime"><span>${escapeHtml(displayDate(record.date))}</span><b>${escapeHtml(record.time)}</b></div></td><td>${escapeHtml(person?.phone || "-")}</td></tr>`;
+    container.innerHTML = groupedRecords.map((group) => {
+      const details = group.records.map((record, index) => {
+        const method = record.source === "manual" ? "직접 출석" : "QR 출석";
+        return `<li><span class="record-number">${index + 1}</span><time datetime="${escapeHtml(`${record.date}T${record.time}`)}"><b>${escapeHtml(displayDate(record.date))}</b><span>${escapeHtml(record.time)}</span></time><span class="record-method">${method}</span></li>`;
+      }).join("");
+      return `<details class="record-group"><summary><span class="record-avatar">${escapeHtml(group.name.charAt(0) || "?")}</span><span class="record-person"><strong>${escapeHtml(group.name)}</strong><small>${escapeHtml(group.phone || "연락처 없음")}</small></span><span class="record-total"><b>${group.records.length}</b>회 출석</span><span class="record-chevron" aria-hidden="true">⌄</span></summary><div class="record-details"><div class="record-details-head"><strong>상세 출석 내역</strong><span>최신순 · 총 ${group.records.length}회</span></div><ol>${details}</ol></div></details>`;
     }).join("");
     $("#recordsEmpty strong").textContent = result.valid ? "조회 조건에 맞는 출석 기록이 없습니다" : "조회 기간과 시간을 확인해 주세요";
     $("#recordsEmpty p").textContent = result.valid ? "기간·시간·이름을 바꾸고 조회 버튼을 눌러보세요." : "시작일·시작시간은 종료일·종료시간보다 앞서야 합니다.";
     empty.classList.toggle("show", records.length === 0);
-    $(".table-wrap").classList.toggle("hidden", records.length === 0);
+    container.classList.toggle("hidden", records.length === 0);
   }
 
   function renderPresetButtons() {
