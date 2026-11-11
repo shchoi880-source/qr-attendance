@@ -421,9 +421,12 @@
     if (!canvas) return showToast("접속 QR이 아직 준비되지 않았습니다.");
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!blob) return showToast("접속 QR 이미지를 만들지 못했습니다.");
-    const action = await shareOrDownloadFile(blob, "QR출석부_사이트_접속용_QR.png", "QR 출석부 사이트 접속 QR");
-    if (action === "shared") showToast("접속 QR을 공유하거나 저장했습니다.");
-    if (action === "downloaded") showToast("접속 QR 이미지를 다운로드했습니다.");
+    const action = await shareOrDownloadFile(blob, "QR출석부_사이트_접속용_QR.png", "QR 출석부 사이트 접속 QR", SITE_URL);
+    if (action === "shared-file") showToast("공유창에서 QR 저장 위치나 보낼 앱을 선택하세요.");
+    if (action === "shared-text") showToast("공유창에서 출석부 주소를 저장하거나 보내세요.");
+    if (action === "download-requested") showToast("브라우저에 QR 다운로드를 요청했습니다. 다운로드 목록을 확인하세요.");
+    if (action === "unsupported") showToast("이 브라우저는 파일 저장을 지원하지 않습니다. Chrome 또는 Safari에서 다시 열어 주세요.");
+    if (action === "cancelled") showToast("QR 내보내기를 취소했습니다.");
   }
 
   function printCurrentQr() {
@@ -567,9 +570,12 @@
     const csv = "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
     const timeLabel = `${result.filters.start.replace(":", "")}-${result.filters.end.replace(":", "")}`;
     const filename = `출석명단_${result.filters.startDate}-${result.filters.endDate}_${timeLabel}.csv`;
-    const action = await shareOrDownloadFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename, "QR 출석부 조회 결과");
-    if (action === "shared") showToast("CSV 파일을 공유하거나 저장했습니다.");
-    if (action === "downloaded") showToast("CSV 파일을 다운로드했습니다.");
+    const action = await shareOrDownloadFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename, "QR 출석부 조회 결과", csv.replace(/^\ufeff/, ""), true);
+    if (action === "shared-file") showToast("공유창에서 파일 저장 위치나 보낼 앱을 선택하세요.");
+    if (action === "shared-text") showToast("공유창에서 CSV 내용을 저장하거나 보낼 앱을 선택하세요.");
+    if (action === "download-requested") showToast("브라우저에 다운로드를 요청했습니다. 다운로드 목록을 확인하세요.");
+    if (action === "unsupported") showToast("이 브라우저는 파일 저장을 지원하지 않습니다. Chrome 또는 Safari에서 다시 열어 주세요.");
+    if (action === "cancelled") showToast("CSV 내보내기를 취소했습니다.");
   }
 
   function backupData() {
@@ -585,19 +591,39 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  async function shareOrDownloadFile(blob, filename, title) {
-    try {
-      const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+  async function shareOrDownloadFile(blob, filename, title, fallbackText = "", tryPlainTextFile = false) {
+    const shareFile = async (file) => {
+      if (!navigator.share || !navigator.canShare?.({ files: [file] })) return false;
+      try {
         await navigator.share({ title, files: [file] });
-        return "shared";
+        return true;
+      } catch (error) {
+        if (error?.name === "AbortError") throw error;
+        console.warn("이 형식의 파일 공유가 거절되었습니다.", error);
+        return false;
+      }
+    };
+
+    try {
+      const originalFile = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+      if (await shareFile(originalFile)) return "shared-file";
+      if (tryPlainTextFile && fallbackText) {
+        const textFile = new File([fallbackText], filename, { type: "text/plain;charset=utf-8" });
+        if (await shareFile(textFile)) return "shared-file";
+      }
+      if (navigator.share && fallbackText) {
+        await navigator.share({ title, text: fallbackText });
+        return "shared-text";
       }
     } catch (error) {
       if (error?.name === "AbortError") return "cancelled";
-      console.warn("파일 공유를 사용할 수 없어 다운로드로 전환합니다.", error);
+      console.warn("휴대폰 공유 기능을 사용할 수 없습니다.", error);
     }
+
+    const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (isMobile) return "unsupported";
     downloadBlob(blob, filename);
-    return "downloaded";
+    return "download-requested";
   }
 
   async function restoreData(file) {
