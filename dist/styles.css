@@ -214,6 +214,7 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
 .record-person small { color: var(--muted); font-size: 10px; }
 .record-total { min-width: 100px; color: var(--green); font-size: 13px; font-weight: 700; text-align: right; white-space: nowrap; }
 .record-total b { margin-right: 3px; font-size: 22px; }
+.record-total.zero { color: var(--muted); }
 .record-chevron { color: var(--muted); font-size: 20px; text-align: center; transition: transform .2s; }
 .record-group[open] .record-chevron { transform: rotate(180deg); }
 .record-details { padding: 0 20px 18px 80px; background: #fbfaf7; border-top: 1px solid #e6eee9; }
@@ -227,6 +228,7 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
 .record-details time b { color: var(--ink); }
 .record-details time span { color: var(--green-2); font-weight: 800; font-variant-numeric: tabular-nums; }
 .record-method { color: var(--muted); font-size: 9px; }
+.record-details li.record-none { display: block; padding: 14px 0; color: var(--muted); font-size: 11px; text-align: center; }
 .empty-state { min-height: 230px; display: none; align-items: center; justify-content: center; flex-direction: column; color: var(--muted); text-align: center; }
 .empty-state.show, .empty-state.compact { display: flex; }
 .empty-state.compact { min-height: 100px; }

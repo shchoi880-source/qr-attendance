@@ -211,6 +211,11 @@
     $("#recordPresent").textContent = records.length;
     $("#recordAbsent").textContent = participantCount;
     const groups = new Map();
+    if (result.valid) {
+      data.participants
+        .filter((person) => !result.filters.query || person.name.toLowerCase().includes(result.filters.query))
+        .forEach((person) => groups.set(person.id, { key: person.id, name: person.name, phone: person.phone || "", records: [] }));
+    }
     records.forEach((record) => {
       const key = record.participantId || `name:${record.name}`;
       if (!groups.has(key)) {
@@ -223,16 +228,17 @@
     const container = $("#recordGroups");
     const empty = $("#recordsEmpty");
     container.innerHTML = groupedRecords.map((group) => {
-      const details = group.records.map((record, index) => {
+      const details = group.records.length ? group.records.map((record, index) => {
         const method = record.source === "manual" ? "직접 출석" : "QR 출석";
         return `<li><span class="record-number">${index + 1}</span><time datetime="${escapeHtml(`${record.date}T${record.time}`)}"><b>${escapeHtml(displayDate(record.date))}</b><span>${escapeHtml(record.time)}</span></time><span class="record-method">${method}</span></li>`;
-      }).join("");
-      return `<details class="record-group"><summary><span class="record-avatar">${escapeHtml(group.name.charAt(0) || "?")}</span><span class="record-person"><strong>${escapeHtml(group.name)}</strong><small>${escapeHtml(group.phone || "연락처 없음")}</small></span><span class="record-total"><b>${group.records.length}</b>회 출석</span><span class="record-chevron" aria-hidden="true">⌄</span></summary><div class="record-details"><div class="record-details-head"><strong>상세 출석 내역</strong><span>최신순 · 총 ${group.records.length}회</span></div><ol>${details}</ol></div></details>`;
+      }).join("") : '<li class="record-none">조회 기간에 출석 기록이 없습니다.</li>';
+      const detailSummary = group.records.length ? `최신순 · 총 ${group.records.length}회` : "조회 기간 내 기록 없음";
+      return `<details class="record-group"><summary><span class="record-avatar">${escapeHtml(group.name.charAt(0) || "?")}</span><span class="record-person"><strong>${escapeHtml(group.name)}</strong><small>${escapeHtml(group.phone || "연락처 없음")}</small></span><span class="record-total ${group.records.length ? "" : "zero"}"><b>${group.records.length}</b>회 출석</span><span class="record-chevron" aria-hidden="true">⌄</span></summary><div class="record-details"><div class="record-details-head"><strong>상세 출석 내역</strong><span>${detailSummary}</span></div><ol>${details}</ol></div></details>`;
     }).join("");
     $("#recordsEmpty strong").textContent = result.valid ? "조회 조건에 맞는 출석 기록이 없습니다" : "조회 기간과 시간을 확인해 주세요";
     $("#recordsEmpty p").textContent = result.valid ? "기간·시간·이름을 바꾸고 조회 버튼을 눌러보세요." : "시작일·시작시간은 종료일·종료시간보다 앞서야 합니다.";
-    empty.classList.toggle("show", records.length === 0);
-    container.classList.toggle("hidden", records.length === 0);
+    empty.classList.toggle("show", groupedRecords.length === 0);
+    container.classList.toggle("hidden", groupedRecords.length === 0);
   }
 
   function renderPresetButtons() {
