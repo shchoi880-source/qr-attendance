@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = "qrAttendance.data.v1";
   const ADMIN_SESSION_KEY = "qrAttendance.adminUntil";
-  const ADMIN_PIN = "14035";
+  const ADMIN_PIN_KEY = "qrAttendance.adminPin.v1";
   const SITE_URL = "https://qr-attendance-local-20261109.workspace-039582.chatgpt.site";
   const ADMIN_DURATION = 30 * 60 * 1000;
   const ATTENDANCE_COOLDOWN = 30 * 60 * 1000;
@@ -43,7 +43,6 @@
   function saveData() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      updateStorageSummary();
     } catch (error) {
       showToast("저장 공간이 부족합니다. 백업 후 오래된 기록을 정리해 주세요.");
       console.error(error);
@@ -137,7 +136,6 @@
     renderRecords();
     renderPresetButtons();
     updateAdminUi();
-    updateStorageSummary();
   }
 
   function renderHome() {
@@ -295,18 +293,36 @@
     if (route === "people") renderPeople();
   }
 
+  function configuredAdminPin() {
+    return localStorage.getItem(ADMIN_PIN_KEY) || "";
+  }
+
+  function hasAdminPin() {
+    return /^\d{4,8}$/.test(configuredAdminPin());
+  }
+
   function isAdminUnlocked() {
-    return Number(sessionStorage.getItem(ADMIN_SESSION_KEY) || 0) > Date.now();
+    return !hasAdminPin() || Number(sessionStorage.getItem(ADMIN_SESSION_KEY) || 0) > Date.now();
   }
 
   function updateAdminUi() {
+    const protectedByPin = hasAdminPin();
     const unlocked = isAdminUnlocked();
     const toggle = $("#adminToggle");
+    toggle.hidden = !protectedByPin;
     toggle.classList.toggle("unlocked", unlocked);
     toggle.innerHTML = `<span>●</span> ${unlocked ? "관리자 잠금" : "관리자"}`;
+    const summary = $("#adminPasswordSummary");
+    const button = $("#openAdminPasswordBtn");
+    if (summary) summary.textContent = protectedByPin ? "관리자 비밀번호가 설정되어 있습니다. 이 기기에서만 적용됩니다." : "현재 비밀번호 없이 바로 사용할 수 있습니다.";
+    if (button) button.textContent = protectedByPin ? "비밀번호 변경·해제" : "비밀번호 설정";
   }
 
   function openPinDialog(route = "home") {
+    if (!hasAdminPin()) {
+      navigate(route);
+      return;
+    }
     pendingAdminRoute = route;
     $("#adminPin").value = "";
     $("#pinError").textContent = "";
@@ -323,8 +339,8 @@
   function unlockAdmin(event) {
     event.preventDefault();
     const input = $("#adminPin");
-    if (input.value !== ADMIN_PIN) {
-      $("#pinError").textContent = "PIN 번호가 맞지 않습니다.";
+    if (input.value !== configuredAdminPin()) {
+      $("#pinError").textContent = "비밀번호가 맞지 않습니다.";
       const content = $(".pin-content");
       content.classList.remove("shake");
       void content.offsetWidth;
@@ -341,6 +357,10 @@
   }
 
   function toggleAdmin() {
+    if (!hasAdminPin()) {
+      navigate("settings");
+      return;
+    }
     if (isAdminUnlocked()) {
       sessionStorage.removeItem(ADMIN_SESSION_KEY);
       updateAdminUi();
@@ -349,6 +369,50 @@
     } else {
       openPinDialog("home");
     }
+  }
+
+  function openAdminPasswordDialog() {
+    const enabled = hasAdminPin();
+    $("#adminPasswordForm").reset();
+    $("#adminPasswordError").textContent = "";
+    $("#adminPasswordDialogTitle").textContent = enabled ? "관리자 비밀번호 변경" : "관리자 비밀번호 설정";
+    $("#removeAdminPasswordBtn").hidden = !enabled;
+    $("#adminPasswordDialog").showModal();
+    setTimeout(() => $("#newAdminPassword").focus(), 50);
+  }
+
+  function closeAdminPasswordDialog() {
+    $("#adminPasswordDialog").close();
+  }
+
+  function saveAdminPassword(event) {
+    event.preventDefault();
+    const password = $("#newAdminPassword").value;
+    const confirmation = $("#confirmAdminPassword").value;
+    const error = $("#adminPasswordError");
+    if (!/^\d{4,8}$/.test(password)) {
+      error.textContent = "숫자 4~8자리로 입력해 주세요.";
+      return;
+    }
+    if (password !== confirmation) {
+      error.textContent = "두 번 입력한 비밀번호가 다릅니다.";
+      return;
+    }
+    localStorage.setItem(ADMIN_PIN_KEY, password);
+    sessionStorage.setItem(ADMIN_SESSION_KEY, String(Date.now() + ADMIN_DURATION));
+    closeAdminPasswordDialog();
+    updateAdminUi();
+    showToast("관리자 비밀번호를 설정했습니다.");
+  }
+
+  async function removeAdminPassword() {
+    const okay = await askConfirm("관리자 비밀번호를 없앨까요?", "앞으로는 비밀번호 입력 없이 모든 메뉴를 바로 사용할 수 있습니다.", "비밀번호 없애기", false);
+    if (!okay) return;
+    localStorage.removeItem(ADMIN_PIN_KEY);
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    closeAdminPasswordDialog();
+    updateAdminUi();
+    showToast("관리자 비밀번호를 없앴습니다.");
   }
 
   function openPersonForm() {
@@ -767,30 +831,6 @@
     showToast.timer = setTimeout(() => toast.classList.remove("show"), 2600);
   }
 
-  async function updateStorageSummary() {
-    const target = $("#storageSummary");
-    if (!target || !navigator.storage?.estimate) return;
-    try {
-      const estimate = await navigator.storage.estimate();
-      const used = estimate.usage || new Blob([JSON.stringify(data)]).size;
-      const persistent = await navigator.storage.persisted?.();
-      target.textContent = `현재 약 ${formatBytes(used)} 사용 중 · ${persistent ? "보관 보호됨" : "일반 보관 중"}`;
-    } catch (_) { target.textContent = "이 기기의 브라우저 저장소를 사용합니다."; }
-  }
-
-  function formatBytes(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  }
-
-  async function requestPersistence() {
-    if (!navigator.storage?.persist) return showToast("이 브라우저는 저장소 보호 요청을 지원하지 않습니다.");
-    const granted = await navigator.storage.persist();
-    showToast(granted ? "데이터 보관 보호가 적용되었습니다." : "보관 보호가 허용되지 않았습니다. 정기적으로 백업해 주세요.");
-    updateStorageSummary();
-  }
-
   async function installApp() {
     if (deferredInstallPrompt) {
       deferredInstallPrompt.prompt();
@@ -816,6 +856,12 @@
     $("#pinForm").addEventListener("submit", unlockAdmin);
     $("#closePinDialog").addEventListener("click", closePinDialog);
     $("#pinDialog").addEventListener("cancel", (event) => { event.preventDefault(); closePinDialog(); });
+    $("#openAdminPasswordBtn").addEventListener("click", openAdminPasswordDialog);
+    $("#adminPasswordForm").addEventListener("submit", saveAdminPassword);
+    $("#closeAdminPasswordDialog").addEventListener("click", closeAdminPasswordDialog);
+    $("#cancelAdminPasswordBtn").addEventListener("click", closeAdminPasswordDialog);
+    $("#removeAdminPasswordBtn").addEventListener("click", removeAdminPassword);
+    $("#adminPasswordDialog").addEventListener("cancel", (event) => { event.preventDefault(); closeAdminPasswordDialog(); });
     $("#closePersonFormBtn").addEventListener("click", closePersonForm);
     $("#cancelPersonBtn").addEventListener("click", closePersonForm);
     $("#personForm").addEventListener("submit", addPerson);
@@ -847,7 +893,6 @@
     $("#siteQrDialog").addEventListener("cancel", (event) => { event.preventDefault(); closeSiteQrDialog(); });
     $("#backupBtn").addEventListener("click", backupData);
     $("#restoreInput").addEventListener("change", (event) => restoreData(event.target.files[0]));
-    $("#persistBtn").addEventListener("click", requestPersistence);
     $("#installBtn").addEventListener("click", installApp);
     $("#confirmCancel").addEventListener("click", () => resolveConfirm(false));
     $("#confirmOkay").addEventListener("click", () => resolveConfirm(true));

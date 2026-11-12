@@ -23,7 +23,7 @@ body { margin: 0; min-width: 320px; color: var(--ink); background: var(--cream);
 button, input, select { font: inherit; }
 button { color: inherit; }
 button, label.file-btn { -webkit-tap-highlight-color: transparent; }
-.hidden { display: none !important; }
+.hidden, [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 .app-shell { min-height: 100vh; }
@@ -285,6 +285,15 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
 .pin-field input { height: 62px; padding: 0 18px; border: 2px solid var(--line); border-radius: 15px; text-align: center; font-size: 30px; font-weight: 800; letter-spacing: .42em; text-indent: .42em; }
 .pin-field input:focus { border-color: var(--green-2); }
 .pin-error { min-height: 22px; margin: 8px 0 5px; color: var(--red); font-size: 11px; font-weight: 700; }
+.password-modal { width: min(440px, calc(100% - 30px)); }
+.password-form { display: flex; flex-direction: column; gap: 13px; padding: 34px 30px 26px; }
+.password-form h2 { margin: 0; font-size: 26px; }
+.password-form > p:not(.eyebrow):not(.pin-error) { margin: -5px 0 4px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.password-form label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 800; }
+.password-form input { width: 100%; height: 52px; padding: 0 15px; border: 1px solid var(--line); border-radius: 13px; background: #fff; font-size: 17px; }
+.password-form input:focus { border-color: var(--green-2); outline: 2px solid rgba(42,138,93,.12); }
+.password-actions { margin-top: 2px; }
+.text-danger-button { align-self: center; padding: 5px; border: 0; color: var(--red); background: transparent; font-size: 11px; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .pin-content .btn { width: 100%; }
 .pin-content small { margin-top: 15px; color: var(--muted); font-size: 10px; }
 .pin-content.shake { animation: pinShake .28s linear; }

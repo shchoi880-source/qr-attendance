@@ -23,7 +23,7 @@
         <nav class="desktop-nav" aria-label="주요 메뉴">
           <button data-route="home">홈</button><button data-route="scan" class="active">QR 출석</button><button data-route="people">사람 관리</button><button data-route="records">출석 내역</button><button data-route="settings">백업·설정</button>
         </nav>
-        <button id="adminToggle" class="admin-toggle" type="button"><span>●</span> 관리자</button>
+        <button id="adminToggle" class="admin-toggle" type="button" hidden><span>●</span> 관리자</button>
         <div class="today-pill" id="todayPill"></div>
       </header>
 
@@ -112,7 +112,7 @@
             <div class="panel setting-card accent"><span class="setting-icon">↓</span><div><h2>전체 데이터 백업</h2><p>등록한 사람과 모든 출석 기록을 하나의 백업 파일로 저장합니다.</p></div><button id="backupBtn" class="btn btn-primary">백업 파일 다운로드</button></div>
             <div class="panel setting-card"><span class="setting-icon">↑</span><div><h2>백업 파일 복원</h2><p>다른 기기에서 저장한 백업 파일을 이 기기로 가져옵니다.</p></div><label class="btn btn-secondary file-btn">백업 파일 선택<input id="restoreInput" type="file" accept="application/json,.json" /></label></div>
             <div class="panel setting-card"><span class="setting-icon">▣</span><div><h2>앱처럼 설치</h2><p>홈 화면에 추가하면 주소창 없이 빠르게 실행할 수 있습니다.</p></div><button id="installBtn" class="btn btn-secondary">홈 화면에 설치</button></div>
-            <div class="panel setting-card"><span class="setting-icon">◇</span><div><h2>기기 저장소</h2><p id="storageSummary">저장 공간을 확인하고 있습니다.</p></div><button id="persistBtn" class="btn btn-secondary">데이터 보관 보호 요청</button></div>
+            <div class="panel setting-card"><span class="setting-icon">◆</span><div><h2>관리자 비밀번호</h2><p id="adminPasswordSummary">현재 비밀번호 없이 바로 사용할 수 있습니다.</p></div><button id="openAdminPasswordBtn" class="btn btn-secondary">비밀번호 설정</button></div>
           </div>
           <div class="panel danger-zone"><div><h2>모든 데이터 지우기</h2><p>이 기기에 저장된 사람과 출석 기록을 모두 삭제합니다. 먼저 백업해 주세요.</p></div><button id="clearDataBtn" class="btn btn-danger">전체 삭제</button></div>
           <div class="local-notice"><span>i</span><p><strong>서버에 저장하지 않습니다.</strong> 이 브라우저의 데이터를 삭제하거나 기기를 초기화하면 기록도 사라집니다. 정기적으로 백업 파일을 내려받아 보관해 주세요.</p></div>
@@ -142,12 +142,25 @@
       <form id="pinForm" class="pin-content">
         <span class="pin-lock" aria-hidden="true">◆</span>
         <p class="eyebrow">관리자 전용</p>
-        <h2>관리자 PIN 입력</h2>
-        <p>사람 관리, 출석 내역과 백업 기능을 열려면<br />5자리 PIN을 입력하세요.</p>
-        <label class="pin-field"><span class="sr-only">관리자 PIN</span><input id="adminPin" type="password" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="off" placeholder="•••••" required /></label>
+        <h2>관리자 비밀번호 입력</h2>
+        <p>사람 관리, 출석 내역과 설정을 열려면<br />이 기기에서 설정한 비밀번호를 입력하세요.</p>
+        <label class="pin-field"><span class="sr-only">관리자 비밀번호</span><input id="adminPin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" placeholder="••••" required /></label>
         <p id="pinError" class="pin-error" role="alert"></p>
         <button class="btn btn-primary btn-large" type="submit">관리자 모드 열기</button>
-        <small>이 PIN은 서버 계정이 아닌 간단한 화면 잠금입니다.</small>
+        <small>설정하지 않으면 비밀번호 없이 바로 사용할 수 있습니다.</small>
+      </form>
+    </dialog>
+    <dialog id="adminPasswordDialog" class="modal password-modal">
+      <button class="modal-close" id="closeAdminPasswordDialog" aria-label="비밀번호 설정 닫기">×</button>
+      <form id="adminPasswordForm" class="password-form">
+        <p class="eyebrow">선택 기능</p>
+        <h2 id="adminPasswordDialogTitle">관리자 비밀번호 설정</h2>
+        <p>필요한 경우에만 설정하세요. 설정하지 않으면 모든 메뉴를 바로 사용할 수 있습니다.</p>
+        <label><span>새 비밀번호</span><input id="newAdminPassword" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="new-password" placeholder="숫자 4~8자리" required /></label>
+        <label><span>비밀번호 확인</span><input id="confirmAdminPassword" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="new-password" placeholder="한 번 더 입력" required /></label>
+        <p id="adminPasswordError" class="pin-error" role="alert"></p>
+        <div class="modal-actions password-actions"><button type="button" id="cancelAdminPasswordBtn" class="btn btn-secondary">취소</button><button type="submit" class="btn btn-primary">설정 저장</button></div>
+        <button type="button" id="removeAdminPasswordBtn" class="text-danger-button" hidden>비밀번호 없애기</button>
       </form>
     </dialog>
     <dialog id="presetDialog" class="modal preset-modal">
