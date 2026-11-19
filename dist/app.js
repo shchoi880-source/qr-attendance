@@ -30,10 +30,14 @@
   let confirmResolver = null;
   let pendingAdminRoute = "home";
 
+  function normalizeRecords(records) {
+    return records.map((record) => record && typeof record.time === "string" && record.time.startsWith("24:") ? { ...record, time: "00:" + record.time.slice(3) } : record);
+  }
+
   function loadData() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (saved && Array.isArray(saved.participants) && Array.isArray(saved.records)) return { version: VERSION, participants: saved.participants, records: saved.records, presets: normalizePresets(saved.presets) };
+      if (saved && Array.isArray(saved.participants) && Array.isArray(saved.records)) return { version: VERSION, participants: saved.participants, records: normalizeRecords(saved.records), presets: normalizePresets(saved.presets) };
     } catch (error) {
       console.warn("저장 데이터를 읽지 못했습니다.", error);
     }
@@ -57,7 +61,10 @@
   }
 
   function localTime(value = new Date()) {
-    return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(value);
+    const hh = String(value.getHours()).padStart(2, "0");
+    const mm = String(value.getMinutes()).padStart(2, "0");
+    const ss = String(value.getSeconds()).padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
   }
 
   function displayDate(dateString, includeWeekday = false) {
@@ -198,7 +205,7 @@
     const validTimes = isValidClock(filters.start) && isValidClock(filters.end, true) && filters.start < filters.end;
     if (filters.startDate > filters.endDate || !validTimes) return { records: [], filters, valid: false };
     const records = data.records.filter((record) => {
-      const time = String(record.time || "00:00").slice(0, 5);
+      const time = String(record.time || "00:00").slice(0, 5).replace(/^24:/, "00:");
       const nameMatch = !includeName || !filters.query || record.name.toLowerCase().includes(filters.query);
       return record.date >= filters.startDate && record.date <= filters.endDate && time >= filters.start && time <= filters.end && nameMatch;
     }).sort((a, b) => b.timestamp - a.timestamp);
@@ -798,7 +805,7 @@
       if (!Array.isArray(parsed.participants) || !Array.isArray(parsed.records)) throw new Error("올바른 QR 출석부 백업 파일이 아닙니다.");
       const okay = await askConfirm("백업 파일을 복원할까요?", "현재 이 기기에 있는 데이터는 백업 파일의 내용으로 바뀝니다.", "복원하기", false);
       if (!okay) return;
-      data = { version: VERSION, participants: parsed.participants, records: parsed.records, presets: normalizePresets(parsed.presets) };
+      data = { version: VERSION, participants: parsed.participants, records: normalizeRecords(parsed.records), presets: normalizePresets(parsed.presets) };
       saveData(); renderAll(); showToast("백업 데이터를 복원했습니다.");
     } catch (error) {
       showToast(error.message || "백업 파일을 읽지 못했습니다.");
