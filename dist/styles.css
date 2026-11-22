@@ -175,9 +175,10 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
 .person-main { min-width: 0; }
 .person-main strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .person-main p { margin: 5px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
-.person-actions { display: flex; gap: 6px; }
+.person-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .person-actions button { min-height: 36px; padding: 0 10px; font-size: 11px; }
 .person-actions .more-btn { width: 36px; padding: 0; color: var(--muted); }
+.person-actions .delete-person-btn { color: var(--red); }
 .empty-people { grid-column: 1 / -1; min-height: 310px; display: grid; place-items: center; text-align: center; border: 1px dashed #c8cac2; border-radius: var(--radius); }
 .empty-people .btn { margin-top: 8px; }
 
@@ -242,6 +243,9 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
 .setting-card h2 { margin: 2px 0 7px; }
 .setting-card p { margin: 0; font-size: 12px; }
 .setting-card .btn { grid-column: 2; justify-self: start; margin-top: auto; }
+.cooldown-toggle { min-width: 74px; color: #fff; font-size: 15px; letter-spacing: .08em; }
+.cooldown-toggle.on { background: var(--green); box-shadow: 0 8px 18px rgba(18,55,42,.16); }
+.cooldown-toggle.off { color: #fff; background: #8a918d; }
 .site-qr-card { grid-column: 1 / -1; grid-template-columns: 48px minmax(0, 1fr) 204px; align-items: start; min-height: 252px; }
 .site-qr-copy { min-width: 0; }
 .site-qr-copy small { display: block; overflow-wrap: anywhere; margin-top: 10px; color: var(--muted); font-size: 9px; }
@@ -362,7 +366,7 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
   .person-form .wide { grid-column: auto; }
   .person-card { grid-template-columns: 42px minmax(0, 1fr); }
   .person-card .avatar { width: 42px; height: 42px; }
-  .person-actions { grid-column: 1 / -1; }
+  .person-actions { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .person-actions .btn { flex: 1; }
   .toolbar { align-items: stretch; flex-direction: column; }
   .count-chip { align-self: flex-start; }

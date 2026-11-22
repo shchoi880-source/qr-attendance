@@ -16,9 +16,11 @@
     const item = Array.isArray(presets) ? presets[index] : null;
     return item && typeof item.start === "string" && typeof item.end === "string" ? { start: item.start, end: item.end } : fallback;
   });
-  const emptyState = () => ({ version: VERSION, participants: [], records: [], presets: defaultPresets() });
+  const normalizeSettings = (settings) => ({ cooldownEnabled: settings?.cooldownEnabled !== false });
+  const emptyState = () => ({ version: VERSION, participants: [], records: [], presets: defaultPresets(), settings: normalizeSettings() });
   let data = loadData();
   let currentQrPerson = null;
+  let editingPersonId = null;
   let currentSiteQrCardBlob = null;
   let currentSiteQrPreviewUrl = "";
   let qrScanner = null;
@@ -37,7 +39,7 @@
   function loadData() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (saved && Array.isArray(saved.participants) && Array.isArray(saved.records)) return { version: VERSION, participants: saved.participants, records: normalizeRecords(saved.records), presets: normalizePresets(saved.presets) };
+      if (saved && Array.isArray(saved.participants) && Array.isArray(saved.records)) return { version: VERSION, participants: saved.participants, records: normalizeRecords(saved.records), presets: normalizePresets(saved.presets), settings: normalizeSettings(saved.settings) };
     } catch (error) {
       console.warn("저장 데이터를 읽지 못했습니다.", error);
     }
@@ -143,6 +145,7 @@
     renderRecords();
     renderPresetButtons();
     updateAdminUi();
+    updateCooldownUi();
   }
 
   function renderHome() {
@@ -186,7 +189,7 @@
       const details = [person.phone, person.birth, person.memo].filter(Boolean).join(" · ") || "추가 정보 없음";
       const count = todayByPerson.get(person.id) || 0;
       const info = count ? `${details} · 오늘 ${count}회 출석` : details;
-      return `<article class="person-card"><span class="avatar">${escapeHtml(person.name.slice(0, 1))}</span><div class="person-main"><strong>${escapeHtml(person.name)}</strong><p>${escapeHtml(info)}</p></div><div class="person-actions"><button class="btn btn-secondary" data-action="qr" data-id="${escapeHtml(person.id)}">QR 보기</button><button class="btn btn-primary" data-action="manual" data-id="${escapeHtml(person.id)}">직접 출석</button><button class="btn btn-secondary more-btn" data-action="delete" data-id="${escapeHtml(person.id)}" aria-label="${escapeHtml(person.name)} 삭제">×</button></div></article>`;
+      return `<article class="person-card"><span class="avatar">${escapeHtml(person.name.slice(0, 1))}</span><div class="person-main"><strong>${escapeHtml(person.name)}</strong><p>${escapeHtml(info)}</p></div><div class="person-actions"><button class="btn btn-secondary" data-action="edit" data-id="${escapeHtml(person.id)}">수정</button><button class="btn btn-secondary" data-action="qr" data-id="${escapeHtml(person.id)}">QR 보기</button><button class="btn btn-primary" data-action="manual" data-id="${escapeHtml(person.id)}">직접 출석</button><button class="btn btn-secondary delete-person-btn" data-action="delete" data-id="${escapeHtml(person.id)}">삭제</button></div></article>`;
     }).join("");
   }
 
@@ -422,23 +425,78 @@
     showToast("관리자 비밀번호를 없앴습니다.");
   }
 
-  function openPersonForm() {
+  function isCooldownEnabled() {
+    return normalizeSettings(data.settings).cooldownEnabled;
+  }
+
+  function updateCooldownUi() {
+    const enabled = isCooldownEnabled();
+    const button = $("#cooldownToggleBtn");
+    const summary = $("#cooldownSummary");
+    const scanHint = $("#scanCooldownHint");
+    if (button) {
+      button.textContent = enabled ? "ON" : "OFF";
+      button.setAttribute("aria-pressed", String(enabled));
+      button.classList.toggle("on", enabled);
+      button.classList.toggle("off", !enabled);
+    }
+    if (summary) summary.textContent = enabled ? "같은 사람이 30분 안에 다시 찍으면 출석 횟수에 포함하지 않습니다." : "QR을 찍거나 직접 출석을 누를 때마다 횟수가 계속 올라갑니다.";
+    if (scanHint) scanHint.textContent = enabled ? "개인 QR을 네모 안에 보여주세요. 30분이 지나면 다시 출석할 수 있습니다." : "개인 QR을 네모 안에 보여주세요. 횟수 제한 없이 출석할 수 있습니다.";
+  }
+
+  function toggleCooldown() {
+    data.settings = normalizeSettings(data.settings);
+    data.settings.cooldownEnabled = !data.settings.cooldownEnabled;
+    saveData();
+    updateCooldownUi();
+    showToast(data.settings.cooldownEnabled ? "30분 중복 출석 제한을 켰습니다." : "30분 중복 출석 제한을 껐습니다.");
+  }
+
+  function openPersonForm(person = null) {
+    const editing = person && typeof person.id === "string";
+    editingPersonId = editing ? person.id : null;
+    $("#personForm").reset();
+    $("#personFormEyebrow").textContent = editing ? "회원 정보 수정" : "새 등록";
+    $("#personFormTitle").textContent = editing ? `${person.name} 정보 수정` : "사람 정보";
+    $("#savePersonBtn").textContent = editing ? "수정 내용 저장" : "저장하고 QR 만들기";
+    if (editing) {
+      $("#personName").value = person.name || "";
+      $("#personBirth").value = person.birth || "";
+      $("#personPhone").value = person.phone || "";
+      $("#personMemo").value = person.memo || "";
+    }
     $("#personFormWrap").classList.remove("hidden");
     $("#openPersonFormBtn").classList.add("hidden");
-    setTimeout(() => $("#personName").focus(), 30);
+    setTimeout(() => {
+      $("#personFormWrap").scrollIntoView({ behavior: "smooth", block: "start" });
+      $("#personName").focus();
+    }, 30);
   }
 
   function closePersonForm() {
+    editingPersonId = null;
     $("#personFormWrap").classList.add("hidden");
     $("#openPersonFormBtn").classList.remove("hidden");
     $("#personForm").reset();
   }
 
-  function addPerson(event) {
+  function savePerson(event) {
     event.preventDefault();
     const name = $("#personName").value.trim();
     if (!name) return;
-    const person = { id: makeId(), name, birth: $("#personBirth").value, phone: $("#personPhone").value.trim(), memo: $("#personMemo").value.trim(), createdAt: Date.now() };
+    const values = { name, birth: $("#personBirth").value, phone: $("#personPhone").value.trim(), memo: $("#personMemo").value.trim() };
+    if (editingPersonId) {
+      const person = personById(editingPersonId);
+      if (!person) return closePersonForm();
+      Object.assign(person, values, { updatedAt: Date.now() });
+      data.records.forEach((record) => { if (record.participantId === person.id) record.name = name; });
+      saveData();
+      closePersonForm();
+      renderAll();
+      showToast(`${name}님의 정보를 수정했습니다.`);
+      return;
+    }
+    const person = { id: makeId(), ...values, createdAt: Date.now() };
     data.participants.push(person);
     saveData();
     closePersonForm();
@@ -686,7 +744,7 @@
 
   function markAttendance(person, source = "manual") {
     const now = new Date();
-    const latest = data.records.filter((record) => record.participantId === person.id).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
+    const latest = isCooldownEnabled() ? data.records.filter((record) => record.participantId === person.id).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0] : null;
     if (latest) {
       const elapsed = now.getTime() - Number(latest.timestamp || 0);
       if (elapsed >= 0 && elapsed < ATTENDANCE_COOLDOWN) return { cooldown: true, record: latest, remainingMinutes: Math.ceil((ATTENDANCE_COOLDOWN - elapsed) / 60000) };
@@ -753,7 +811,7 @@
   }
 
   function backupData() {
-    const payload = { app: "QR 출석부", version: VERSION, exportedAt: new Date().toISOString(), participants: data.participants, records: data.records, presets: normalizePresets(data.presets) };
+    const payload = { app: "QR 출석부", version: VERSION, exportedAt: new Date().toISOString(), participants: data.participants, records: data.records, presets: normalizePresets(data.presets), settings: normalizeSettings(data.settings) };
     downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `QR출석부_전체백업_${localDate()}.json`);
     showToast("전체 백업 파일을 저장했습니다.");
   }
@@ -805,7 +863,7 @@
       if (!Array.isArray(parsed.participants) || !Array.isArray(parsed.records)) throw new Error("올바른 QR 출석부 백업 파일이 아닙니다.");
       const okay = await askConfirm("백업 파일을 복원할까요?", "현재 이 기기에 있는 데이터는 백업 파일의 내용으로 바뀝니다.", "복원하기", false);
       if (!okay) return;
-      data = { version: VERSION, participants: parsed.participants, records: normalizeRecords(parsed.records), presets: normalizePresets(parsed.presets) };
+      data = { version: VERSION, participants: parsed.participants, records: normalizeRecords(parsed.records), presets: normalizePresets(parsed.presets), settings: normalizeSettings(parsed.settings) };
       saveData(); renderAll(); showToast("백업 데이터를 복원했습니다.");
     } catch (error) {
       showToast(error.message || "백업 파일을 읽지 못했습니다.");
@@ -858,7 +916,7 @@
       if (event.target.closest("[data-open-person]")) openPersonForm();
       if (event.target.closest("[data-close-dialog]")) $("#qrDialog").close();
     });
-    $("#openPersonFormBtn").addEventListener("click", openPersonForm);
+    $("#openPersonFormBtn").addEventListener("click", () => openPersonForm());
     $("#adminToggle").addEventListener("click", toggleAdmin);
     $("#pinForm").addEventListener("submit", unlockAdmin);
     $("#closePinDialog").addEventListener("click", closePinDialog);
@@ -871,7 +929,7 @@
     $("#adminPasswordDialog").addEventListener("cancel", (event) => { event.preventDefault(); closeAdminPasswordDialog(); });
     $("#closePersonFormBtn").addEventListener("click", closePersonForm);
     $("#cancelPersonBtn").addEventListener("click", closePersonForm);
-    $("#personForm").addEventListener("submit", addPerson);
+    $("#personForm").addEventListener("submit", savePerson);
     $("#peopleSearch").addEventListener("input", renderPeople);
     $("#searchRecordsBtn").addEventListener("click", () => {
       if ($("#recordStartDate").value > $("#recordEndDate").value) return showToast("조회 시작일은 종료일보다 앞서야 합니다.");
@@ -900,6 +958,7 @@
     $("#siteQrDialog").addEventListener("cancel", (event) => { event.preventDefault(); closeSiteQrDialog(); });
     $("#backupBtn").addEventListener("click", backupData);
     $("#restoreInput").addEventListener("change", (event) => restoreData(event.target.files[0]));
+    $("#cooldownToggleBtn").addEventListener("click", toggleCooldown);
     $("#installBtn").addEventListener("click", installApp);
     $("#confirmCancel").addEventListener("click", () => resolveConfirm(false));
     $("#confirmOkay").addEventListener("click", () => resolveConfirm(true));
@@ -909,6 +968,7 @@
       if (!button) return;
       const person = personById(button.dataset.id);
       if (!person) return;
+      if (button.dataset.action === "edit") openPersonForm(person);
       if (button.dataset.action === "qr") openQrDialog(person);
       if (button.dataset.action === "manual") {
         const result = markAttendance(person, "manual");
