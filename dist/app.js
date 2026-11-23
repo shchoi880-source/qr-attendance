@@ -238,13 +238,14 @@
     const groupedRecords = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
     const container = $("#recordGroups");
     const empty = $("#recordsEmpty");
+    const openGroups = new Set([...container.querySelectorAll("details.record-group[open]")].map((item) => item.dataset.groupKey));
     container.innerHTML = groupedRecords.map((group) => {
       const details = group.records.length ? group.records.map((record, index) => {
         const method = record.source === "manual" ? "직접 출석" : "QR 출석";
-        return `<li><span class="record-number">${index + 1}</span><time datetime="${escapeHtml(`${record.date}T${record.time}`)}"><b>${escapeHtml(displayDate(record.date))}</b><span>${escapeHtml(record.time)}</span></time><span class="record-method">${method}</span></li>`;
+        return `<li><span class="record-number">${index + 1}</span><time datetime="${escapeHtml(`${record.date}T${record.time}`)}"><b>${escapeHtml(displayDate(record.date))}</b><span>${escapeHtml(record.time)}</span></time><span class="record-actions"><span class="record-method">${method}</span><button type="button" class="record-delete" data-record-id="${escapeHtml(record.id || "")}" data-record-ts="${escapeHtml(String(record.timestamp || ""))}" data-record-pid="${escapeHtml(record.participantId || "")}" aria-label="이 출석 기록 삭제" title="출석 기록 삭제">×</button></span></li>`;
       }).join("") : '<li class="record-none">조회 기간에 출석 기록이 없습니다.</li>';
       const detailSummary = group.records.length ? `최신순 · 총 ${group.records.length}회` : "조회 기간 내 기록 없음";
-      return `<details class="record-group"><summary><span class="record-avatar">${escapeHtml(group.name.charAt(0) || "?")}</span><span class="record-person"><strong>${escapeHtml(group.name)}</strong><small>${escapeHtml(group.phone || "연락처 없음")}</small></span><span class="record-total ${group.records.length ? "" : "zero"}"><b>${group.records.length}</b>회 출석</span><span class="record-chevron" aria-hidden="true">⌄</span></summary><div class="record-details"><div class="record-details-head"><strong>상세 출석 내역</strong><span>${detailSummary}</span></div><ol>${details}</ol></div></details>`;
+      return `<details class="record-group" data-group-key="${escapeHtml(group.key)}"${openGroups.has(group.key) ? " open" : ""}><summary><span class="record-avatar">${escapeHtml(group.name.charAt(0) || "?")}</span><span class="record-person"><strong>${escapeHtml(group.name)}</strong><small>${escapeHtml(group.phone || "연락처 없음")}</small></span><span class="record-total ${group.records.length ? "" : "zero"}"><b>${group.records.length}</b>회 출석</span><span class="record-chevron" aria-hidden="true">⌄</span></summary><div class="record-details"><div class="record-details-head"><strong>상세 출석 내역</strong><span>${detailSummary}</span></div><ol>${details}</ol></div></details>`;
     }).join("");
     $("#recordsEmpty strong").textContent = result.valid ? "조회 조건에 맞는 출석 기록이 없습니다" : "조회 기간과 시간을 확인해 주세요";
     $("#recordsEmpty p").textContent = result.valid ? "기간·시간·이름을 바꾸고 조회 버튼을 눌러보세요." : "시작일·시작시간은 종료일·종료시간보다 앞서야 합니다.";
@@ -978,6 +979,22 @@
         const okay = await askConfirm(`${person.name}님을 삭제할까요?`, "사람 정보는 삭제되지만 과거 출석 기록은 유지됩니다.");
         if (okay) { data.participants = data.participants.filter((item) => item.id !== person.id); saveData(); renderAll(); showToast("사람 정보를 삭제했습니다."); }
       }
+    });
+    $("#recordGroups").addEventListener("click", async (event) => {
+      const button = event.target.closest(".record-delete");
+      if (!button) return;
+      event.preventDefault();
+      const { recordId, recordTs, recordPid } = button.dataset;
+      const matches = (record) => recordId ? record.id === recordId : String(record.timestamp) === recordTs && (record.participantId || "") === recordPid;
+      const target = data.records.find(matches);
+      if (!target) return;
+      const okay = await askConfirm("이 출석 기록을 삭제할까요?", `${target.name}님 ${displayDate(target.date)} ${target.time} 출석 기록입니다. 삭제하면 복구할 수 없습니다.`, "확인");
+      if (!okay) return;
+      const index = data.records.indexOf(target);
+      if (index >= 0) data.records.splice(index, 1);
+      saveData();
+      renderAll();
+      showToast("출석 기록을 삭제했습니다.");
     });
     $("#clearDataBtn").addEventListener("click", async () => {
       const okay = await askConfirm("모든 데이터를 삭제할까요?", "등록한 사람과 모든 출석 기록이 이 기기에서 사라집니다. 이 작업은 되돌릴 수 없습니다.", "모두 삭제");

@@ -229,6 +229,9 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
 .record-details time b { color: var(--ink); }
 .record-details time span { color: var(--green-2); font-weight: 800; font-variant-numeric: tabular-nums; }
 .record-method { color: var(--muted); font-size: 9px; }
+.record-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.record-delete { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 1px solid #e4dcd6; border-radius: 50%; background: #fff; color: #b4483c; font-size: 16px; line-height: 1; cursor: pointer; transition: background .15s, color .15s; }
+.record-delete:hover, .record-delete:focus-visible { background: #b4483c; border-color: #b4483c; color: #fff; }
 .record-details li.record-none { display: block; padding: 14px 0; color: var(--muted); font-size: 11px; text-align: center; }
 .empty-state { min-height: 230px; display: none; align-items: center; justify-content: center; flex-direction: column; color: var(--muted); text-align: center; }
 .empty-state.show, .empty-state.compact { display: flex; }
@@ -388,6 +391,7 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
   .record-details li { grid-template-columns: 26px minmax(0, 1fr); }
   .record-details time { align-items: flex-start; flex-direction: column; gap: 2px; }
   .record-method { grid-column: 2; }
+  .record-actions { grid-column: 2; justify-content: space-between; }
   .settings-grid { grid-template-columns: 1fr; }
   .setting-card { min-height: 190px; }
   .site-qr-card { grid-template-columns: 42px minmax(0, 1fr); }
