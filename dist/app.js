@@ -194,7 +194,7 @@
       const details = [person.phone, person.birth, person.memo].filter(Boolean).join(" · ") || "추가 정보 없음";
       const count = todayByPerson.get(person.id) || 0;
       const info = count ? `${details} · 오늘 ${count}회 출석` : details;
-      return `<article class="person-card"><span class="avatar">${escapeHtml(person.name.slice(0, 1))}</span><div class="person-main"><strong>${escapeHtml(person.name)}</strong><p>${escapeHtml(info)}</p></div><div class="person-actions"><button class="btn btn-secondary" data-action="edit" data-id="${escapeHtml(person.id)}">수정</button><button class="btn btn-secondary" data-action="qr" data-id="${escapeHtml(person.id)}">QR 보기</button><button class="btn btn-primary" data-action="manual" data-id="${escapeHtml(person.id)}">직접 출석</button><button class="btn btn-secondary delete-person-btn" data-action="delete" data-id="${escapeHtml(person.id)}">삭제</button></div></article>`;
+      return `<article class="person-card"><span class="avatar">${escapeHtml(person.name.slice(0, 1))}</span><div class="person-main"><strong>${escapeHtml(person.name)}</strong><p>${escapeHtml(info)}</p></div><div class="person-actions"><button class="btn btn-secondary" data-action="edit" data-id="${escapeHtml(person.id)}">수정</button><button class="btn btn-secondary" data-action="qr" data-id="${escapeHtml(person.id)}">QR 보기</button><button class="btn btn-primary" data-action="manual" data-id="${escapeHtml(person.id)}">직접 출석</button></div><button type="button" class="record-delete person-delete" data-action="delete" data-id="${escapeHtml(person.id)}" aria-label="${escapeHtml(person.name)} 삭제" title="사람 삭제">×</button></article>`;
     }).join("");
   }
 
@@ -981,7 +981,7 @@
         showToast(result.cooldown ? `${person.name}님은 30분 이내 출석 기록이 있어 카운트하지 않았습니다. 약 ${result.remainingMinutes}분 남았습니다.` : `${person.name}님 출석 횟수를 1회 추가했습니다.`);
       }
       if (button.dataset.action === "delete") {
-        const okay = await askConfirm(`${person.name}님을 삭제할까요?`, "사람 정보는 삭제되지만 과거 출석 기록은 유지됩니다.");
+        const okay = await askConfirm(`${person.name}님을 삭제할까요?`, "삭제하면 복구할 수 없습니다. 사람 정보만 삭제되고 과거 출석 기록은 남습니다.", "확인");
         if (okay) { data.participants = data.participants.filter((item) => item.id !== person.id); saveData(); renderAll(); showToast("사람 정보를 삭제했습니다."); }
       }
     });
