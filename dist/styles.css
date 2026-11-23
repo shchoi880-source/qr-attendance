@@ -413,3 +413,16 @@ input:focus, .select:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px
   body { background: #fff; }
   .topbar, .mobile-nav, .modal-close, .modal-actions { display: none !important; }
 }
+
+/* 주소 이사 안내 (옛 주소에서만 표시) */
+.move-banner { position: relative; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px max(20px, calc((100vw - 1380px) / 2)); color: #fff; background: #b4483c; }
+.move-banner-text { display: grid; gap: 3px; }
+.move-banner-text strong { font-size: 15px; }
+.move-banner-text span { font-size: 12px; opacity: .92; }
+.move-banner-actions { display: flex; flex-shrink: 0; align-items: center; gap: 14px; }
+.move-banner .btn-primary { background: #fff; color: #b4483c; box-shadow: none; }
+.move-banner .text-btn { color: #fff; text-decoration: underline; }
+@media (max-width: 760px) {
+  .move-banner { flex-direction: column; align-items: stretch; padding: 14px 16px; }
+  .move-banner-actions { flex-direction: column; align-items: stretch; gap: 6px; }
+}

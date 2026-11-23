@@ -4,7 +4,12 @@
   const STORAGE_KEY = "qrAttendance.data.v1";
   const ADMIN_SESSION_KEY = "qrAttendance.adminUntil";
   const ADMIN_PIN_KEY = "qrAttendance.adminPin.v1";
-  const SITE_URL = "https://qr-attendance-local-20261109.workspace-039582.chatgpt.site";
+  const OLD_SITE_ORIGIN = "https://qr-attendance-local-20261109.workspace-039582.chatgpt.site";
+  const NEW_SITE_ORIGIN = "https://shchoi880-source.github.io";
+  const SITE_URL = `${NEW_SITE_ORIGIN}/qr-attendance/`;
+  const SITE_LABEL = "shchoi880-source.github.io/qr-attendance";
+  const IS_OLD_SITE = location.origin === OLD_SITE_ORIGIN;
+  const MIGRATE_HASH = "#migrate";
   const ADMIN_DURATION = 30 * 60 * 1000;
   const ATTENDANCE_COOLDOWN = 30 * 60 * 1000;
   const PROTECTED_ROUTES = new Set(["home", "people", "records", "settings"]);
@@ -616,7 +621,7 @@
       eyebrow: "공유용 접속 QR",
       title: "QR 출석부 접속하기",
       description: "휴대폰 기본 카메라로 QR을 비춰주세요.",
-      footer: "qr-attendance-local-20261109.workspace-039582.chatgpt.site"
+      footer: SITE_LABEL
     });
     return canvasBlob(card);
   }
@@ -1004,7 +1009,90 @@
     window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); deferredInstallPrompt = event; });
   }
 
+  // ---- 주소 이사(옛 ChatGPT 주소 → GitHub Pages) ----
+  // 옛 주소: 안내 배너 + [데이터 옮기기] 버튼. 새 주소 창을 열고 postMessage로 데이터를 넘깁니다.
+  // 새 주소(#migrate): 옛 주소에서 온 메시지만 받아 기존 데이터와 합칩니다(같은 기록은 중복되지 않음).
+  function setupOldSiteMoveBanner() {
+    const banner = document.createElement("div");
+    banner.className = "move-banner";
+    banner.innerHTML = `<div class="move-banner-text"><strong>QR 출석부 주소가 바뀌었습니다</strong><span>아래 버튼을 한 번 누르면 이 기기의 사람 목록과 출석 기록이 새 주소로 옮겨집니다.</span></div><div class="move-banner-actions"><button type="button" class="btn btn-primary" id="moveDataBtn">데이터 옮기고 새 주소로 가기</button><button type="button" class="text-btn" id="moveBackupBtn">백업 파일로 옮기기</button></div>`;
+    document.body.prepend(banner);
+    document.body.classList.add("has-move-banner");
+    let popup = null;
+    let sent = false;
+    window.addEventListener("message", (event) => {
+      if (event.origin !== NEW_SITE_ORIGIN || !event.data || typeof event.data !== "object") return;
+      if (event.data.type === "qra-migrate-ready" && popup && event.source === popup && !sent) {
+        sent = true;
+        popup.postMessage({ type: "qra-migrate-data", payload: { data, adminPin: localStorage.getItem(ADMIN_PIN_KEY) || "" } }, NEW_SITE_ORIGIN);
+      }
+      if (event.data.type === "qra-migrate-done") {
+        $(".move-banner-text span", banner).textContent = `옮기기 완료! 사람 ${event.data.people}명, 출석 ${event.data.records}건이 새 주소에 있습니다. 이제 새 주소를 사용해 주세요.`;
+        $("#moveDataBtn").textContent = "새 주소 열기";
+        showToast("새 주소로 데이터를 옮겼습니다.");
+      }
+    });
+    $("#moveDataBtn").addEventListener("click", () => {
+      sent = false;
+      popup = window.open(SITE_URL + MIGRATE_HASH, "_blank");
+      if (!popup) {
+        showToast("새 창이 차단되었습니다. 팝업을 허용하거나 '백업 파일로 옮기기'를 이용해 주세요.");
+        return;
+      }
+      setTimeout(() => { if (!sent) showToast("새 주소가 응답하지 않습니다. '백업 파일로 옮기기'를 이용해 주세요."); }, 15000);
+    });
+    $("#moveBackupBtn").addEventListener("click", async () => {
+      backupData();
+      await askConfirm("백업 파일로 옮기기", `방금 저장한 백업 파일을 새 주소(${SITE_LABEL})의 설정 → '백업 파일 복원'에서 불러오면 됩니다. 새 주소를 열까요?`, "새 주소 열기", false) && window.open(SITE_URL, "_blank");
+    });
+  }
+
+  function recordKey(record) {
+    return record.id || `${record.participantId || record.name}|${record.timestamp}`;
+  }
+
+  function mergeMigratedData(payload) {
+    const incoming = payload?.data;
+    if (!incoming || !Array.isArray(incoming.participants) || !Array.isArray(incoming.records)) return null;
+    const hadData = data.participants.length > 0 || data.records.length > 0;
+    const peopleIds = new Set(data.participants.map((person) => person.id));
+    incoming.participants.forEach((person) => { if (person && person.id && !peopleIds.has(person.id)) { data.participants.push(person); peopleIds.add(person.id); } });
+    const recordKeys = new Set(data.records.map(recordKey));
+    normalizeRecords(incoming.records).forEach((record) => { if (record && !recordKeys.has(recordKey(record))) { data.records.push(record); recordKeys.add(recordKey(record)); } });
+    const presetsEmpty = normalizePresets(data.presets).every((preset) => !preset.start && !preset.end);
+    if (presetsEmpty) data.presets = normalizePresets(incoming.presets);
+    if (!hadData) data.settings = normalizeSettings(incoming.settings);
+    if (payload.adminPin && !hasAdminPin()) localStorage.setItem(ADMIN_PIN_KEY, payload.adminPin);
+    saveData();
+    renderAll();
+    return { people: data.participants.length, records: data.records.length };
+  }
+
+  function setupMigrationReceiver() {
+    if (IS_OLD_SITE || location.hash !== MIGRATE_HASH) return;
+    history.replaceState(null, "", location.pathname + location.search);
+    if (!window.opener) return;
+    let done = false;
+    window.addEventListener("message", (event) => {
+      if (done || event.origin !== OLD_SITE_ORIGIN || event.source !== window.opener || event.data?.type !== "qra-migrate-data") return;
+      const result = mergeMigratedData(event.data.payload);
+      if (!result) { showToast("옮길 데이터를 읽지 못했습니다. 백업 파일로 옮겨 주세요."); return; }
+      done = true;
+      try { window.opener.postMessage({ type: "qra-migrate-done", ...result }, OLD_SITE_ORIGIN); } catch (error) { console.warn(error); }
+      showToast(`기존 데이터를 옮겼습니다. 사람 ${result.people}명, 출석 ${result.records}건`);
+    });
+    let tries = 0;
+    const ping = () => {
+      if (done || tries++ > 20 || !window.opener) return;
+      try { window.opener.postMessage({ type: "qra-migrate-ready" }, OLD_SITE_ORIGIN); } catch (error) { return; }
+      setTimeout(ping, 500);
+    };
+    ping();
+  }
+
   function initialize() {
+    setupMigrationReceiver();
+    if (IS_OLD_SITE) setupOldSiteMoveBanner();
     $("#recordStartDate").value = localDate();
     $("#recordEndDate").value = localDate();
     prepareClockInput($("#recordStartTime"));
